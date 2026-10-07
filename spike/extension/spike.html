@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Account Launcher Spike</title>
+  <style>
+    body { font: 14px system-ui; margin: 24px; max-width: 760px; }
+    label { display: block; margin: 8px 0; }
+    input { width: 100%; }
+    pre { background: #f4f4f4; padding: 12px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Account Launcher · F0</h1>
+  <button id="ping">ping</button>
+  <button id="list">listProfiles</button>
+  <label>profileDirectory <input id="profile" value="Default"></label>
+  <label>container (vacío = sin contenedor) <input id="container"></label>
+  <label>url <input id="url" value="https://example.com/"></label>
+  <button id="open">open</button>
+  <button id="open2">open ×2 (doble clic rápido)</button>
+  <h2>Favicon (_favicon)</h2>
+  <img id="fav" width="32" height="32" alt="favicon de github.com">
+  <pre id="log"></pre>
+  <script src="spike.js"></script>
+</body>
+</html>

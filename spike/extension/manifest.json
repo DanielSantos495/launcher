@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "Account Launcher Spike",
+  "version": "0.0.1",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5SgBGbWJFiEsNwr8Naf4cOuejzzm6D0CDrxZUrrQVdDUK/+x6OA8yUZznAJd00wp4v7HgaY5uKzeuiCumgpsvTIkIJTY9JBgrJOcGhPhpdRD2IjeAUzPKAw6fu2s0bLRy7KjfJzP6X9vWfUCyf4fEJh/b1p9pmFzx9k4gyl1cwZ5A4RrAqnh8VBO4X8wZFOz1TS33GYmmq6U/6xgUX/QALIjuOqchsjc/RSfzf++F4jRbkN7/3TActTwpp88RWtHWmCEHlwp8ZmpzWKpmll31Asl8RDMXj1kmdn7Y2toq/iiAG2dnvdz/QGeTHB9UUlACdV9Ng5lJgXPsikNVRP93wIDAQAB",
+  "permissions": ["nativeMessaging", "favicon"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "Account Launcher Spike" }
+}

@@ -1,0 +1,4 @@
+.DS_Store
+*.pem
+spike/host/bin/
+spike/host/host.log
