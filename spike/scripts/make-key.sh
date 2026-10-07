@@ -14,8 +14,8 @@ cat > extension/manifest.json <<EOF
   "name": "Account Launcher Spike",
   "version": "0.0.1",
   "key": "$pub",
-  "permissions": ["nativeMessaging", "favicon"],
-  "background": { "service_worker": "background.js" },
+  "permissions": ["nativeMessaging", "favicon", "storage"],
+  "background": { "service_worker": "background.js", "type": "module" },
   "action": { "default_title": "Account Launcher Spike" }
 }
 EOF

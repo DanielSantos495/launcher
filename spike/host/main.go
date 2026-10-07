@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -55,7 +56,26 @@ func main() {
 func handle(req request, cfg config, logger *log.Logger) map[string]any {
 	switch req.Cmd {
 	case "ping":
-		return map[string]any{"ok": true, "version": protocolVersion, "browser": cfg.Browser, "argv": os.Args}
+		resp := map[string]any{"ok": true, "version": protocolVersion, "browser": cfg.Browser, "argv": os.Args}
+		start := time.Now()
+		parent, err := parentExe(os.Getppid())
+		resp["parentMs"] = time.Since(start).Milliseconds()
+		match := "unsupported"
+		switch {
+		case errors.Is(err, errParentUnsupported):
+			resp["parentExe"] = "unsupported"
+		case err != nil:
+			match = "error"
+			resp["parentExe"] = "error: " + safeErr(err)
+		default:
+			m := parentMatch(parent, cfg.Exe)
+			resp["parentExe"] = parent
+			resp["parentMatch"] = m
+			match = strconv.FormatBool(m)
+		}
+		// Privacidad: solo si coincide, nunca la ruta (puede estar bajo el directorio del usuario).
+		logger.Printf("ping parent match=%s parentMs=%d", match, resp["parentMs"])
+		return resp
 	case "listProfiles":
 		profiles, err := readProfiles(cfg.localStatePath())
 		if err != nil {

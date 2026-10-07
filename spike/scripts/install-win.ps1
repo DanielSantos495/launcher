@@ -6,7 +6,8 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$name = 'com.curyapps.launcher.spike'
+# Un nombre de host por navegador (mismo esquema que macOS): -RegKeys decide en que clave se registra.
+$name = "com.curyapps.launcher.spike.$Browser"
 $id = (Get-Content (Join-Path $root 'extension-id.txt') -Raw).Trim()
 if ($id -cnotmatch '^[a-p]{32}$') { throw 'extension-id.txt no contiene un ID valido' }
 # PROCESSOR_ARCHITEW6432 da la arquitectura real si PowerShell corre como proceso de 32 bits.
