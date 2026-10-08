@@ -60,6 +60,7 @@ export default defineConfig([
       'no-restricted-syntax': [
         'error',
         { selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']", message: 'Prohibido (T4).' },
+        { selector: "JSXAttribute[name.name='srcDoc']", message: 'Prohibido (T4).' },
         {
           selector: "CallExpression[callee.object.name='document'][callee.property.name=/^write(ln)?$/]",
           message: 'Prohibido (T4).',

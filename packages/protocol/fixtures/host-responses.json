@@ -27,6 +27,7 @@
     }
   },
   { "name": "open", "cmd": "open", "response": { "ok": true, "result": {} } },
+  { "name": "openTemporary", "cmd": "openTemporary", "response": { "ok": true, "result": {} } },
   {
     "name": "createProfile",
     "cmd": "createProfile",
@@ -44,6 +45,12 @@
       }
     }
   },
+  {
+    "name": "pair.join",
+    "cmd": "pair.join",
+    "response": { "ok": true, "result": { "token": "abcdefghijABCDEFGHIJ0123456789_-abcdefghijk" } }
+  },
+  { "name": "pair.declare", "cmd": "pair.declare", "response": { "ok": true, "result": {} } },
   {
     "name": "pair.list",
     "cmd": "pair.list",
@@ -64,6 +71,17 @@
       }
     }
   },
+  { "name": "pair.remove", "cmd": "pair.remove", "response": { "ok": true, "result": {} } },
+  {
+    "name": "pair.verify",
+    "cmd": "pair.verify",
+    "response": { "ok": true, "result": { "expiresAt": "2026-10-07T12:01:00.000Z" } }
+  },
+  {
+    "name": "pair.prove",
+    "cmd": "pair.prove",
+    "response": { "ok": true, "result": { "verifiedAt": "2026-10-07T12:00:05.000Z" } }
+  },
   {
     "name": "sync.get sin datos",
     "cmd": "sync.get",
@@ -75,5 +93,12 @@
     "cmd": "sync.put",
     "response": { "ok": false, "error": { "code": "conflict", "revision": 5 } }
   },
+  {
+    "name": "icons.get",
+    "cmd": "icons.get",
+    "response": { "ok": true, "result": { "key": "icon:gh1", "mime": "image/png", "base64": "iVBORw0KGgo=" } }
+  },
+  { "name": "icons.put", "cmd": "icons.put", "response": { "ok": true, "result": {} } },
+  { "name": "icons.delete", "cmd": "icons.delete", "response": { "ok": true, "result": {} } },
   { "name": "no emparejado", "cmd": "sync.get", "response": { "ok": false, "error": { "code": "not_paired" } } }
 ]

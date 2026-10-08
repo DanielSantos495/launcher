@@ -35,7 +35,8 @@ const visibleText = (max: number) =>
     v.check((s) => s.trim() !== '' && !hasControlChars(s), 'texto vacío o con caracteres de control'),
   )
 
-// Nombres que no son claves de objeto seguras: v.record los omite sin avisar, así que un id no puede coincidir con ellos.
+// Nombres que no son claves de objeto seguras: v.record los omite sin avisar,
+// así que un id no puede coincidir con ellos.
 const RESERVED_IDS: readonly string[] = ['__proto__', 'constructor', 'prototype']
 
 export const IdSchema = v.pipe(

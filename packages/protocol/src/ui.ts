@@ -2,6 +2,7 @@ import {
   BindingSchema,
   IdSchema,
   LIMITS,
+  MAX_URL_LENGTH,
   OpSchema,
   ProfileDirectorySchema,
   RevisionSchema,
@@ -26,7 +27,9 @@ export const UiRequestSchema = v.variant('type', [
     type: v.literal('account.openTemporary'),
     target: v.variant('kind', [
       v.strictObject({ kind: v.literal('account'), accountId: IdSchema }),
-      v.strictObject({ kind: v.literal('url'), url: v.pipe(v.string(), v.maxLength(2048)) }),
+      // Aquí solo se acota el tamaño. El SW debe pasar target.url por normalizeUrl, con el allowHttp del usuario,
+      // antes de enviarla al host: el host exige la forma canónica pero acepta http siempre (allowHttp es del core).
+      v.strictObject({ kind: v.literal('url'), url: v.pipe(v.string(), v.maxLength(MAX_URL_LENGTH)) }),
     ]),
     name: v.optional(ContainerNameSchema),
   }),

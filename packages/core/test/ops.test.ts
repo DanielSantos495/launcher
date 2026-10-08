@@ -247,4 +247,8 @@ describe('OpSchema', () => {
   it('rechaza una lista como ajustes', () => {
     expect(v.safeParse(OpSchema, { type: 'settings.set', settings: [] }).success).toBe(false)
   })
+
+  it('rechaza settings.set sin la clave settings', () => {
+    expect(v.safeParse(OpSchema, { type: 'settings.set' }).success).toBe(false)
+  })
 })

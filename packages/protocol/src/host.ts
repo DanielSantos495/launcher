@@ -5,6 +5,7 @@ import {
   IdSchema,
   LauncherDataSchema,
   normalizeUrl,
+  notArray,
   ok,
   ProfileDirectorySchema,
   ProfileInfoSchema,
@@ -21,6 +22,10 @@ export const PairCodeSchema = v.pipe(v.string(), v.regex(/^\d{6}$/))
 export const NonceSchema = v.pipe(v.string(), v.regex(/^[A-Za-z0-9_-]{16,64}$/))
 
 // Nombre de contenedor temporal (T2): la longitud se cuenta en puntos de código, como las runas de Go.
+// "En blanco" es exactamente lo que quita String.prototype.trim: los espacios Unicode (U+0009-U+000D, U+0020,
+// U+00A0, U+1680, U+2000-U+200A, U+2028, U+2029, U+202F, U+205F, U+3000), los terminadores de línea y U+FEFF.
+// Un nombre vacío o formado solo por esos caracteres no vale. Go no puede usar strings.TrimSpace tal cual: no
+// considera espacio a U+FEFF (y sí a U+0085, que de todos modos es un control C1 y se rechaza).
 export function isValidContainerName(name: string): boolean {
   return (
     Array.from(name).length <= MAX_CONTAINER_NAME &&
@@ -44,18 +49,26 @@ export const HostUrlSchema = v.pipe(
 
 export const IconKeySchema = v.pipe(v.string(), v.regex(/^icon:[A-Za-z0-9_-]{1,64}$/))
 export const IconMimeSchema = v.picklist(['image/png', 'image/jpeg', 'image/webp'])
+// Tamaño decodificado de un base64 con relleno: longitud / 4 * 3 menos los caracteres "=" finales (0, 1 o 2).
+function decodedSize(base64: string): number {
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0
+  return (base64.length / 4) * 3 - padding
+}
+// El tope de caracteres (43692) solo acota el trabajo de la expresión regular: admite hasta 32769 bytes (43692
+// caracteres sin relleno), así que el límite real (MAX_ICON_BYTES) se comprueba sobre el tamaño decodificado.
 export const Base64Schema = v.pipe(
   v.string(),
   v.minLength(4),
   v.maxLength(Math.ceil(MAX_ICON_BYTES / 3) * 4),
   v.regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/),
+  v.check((s) => decodedSize(s) <= MAX_ICON_BYTES, 'imagen demasiado grande'),
 )
 
-// Valibot da por buenos los arrays como "objetos": sin esta guarda, `args: []` pasaría en los comandos sin argumentos
-// obligatorios y `result: []` en las respuestas vacías. Go los rechaza al decodificar, así que aquí también (T2).
-const NotArray = v.check((input: unknown) => !Array.isArray(input), 'se esperaba un objeto')
+// Valibot da por buenos los arrays como "objetos": sin esta guarda (notArray, de core), `args: []` pasaría en los
+// comandos sin argumentos obligatorios y `result: []` en las respuestas vacías. Go los rechaza al decodificar,
+// así que aquí también (T2).
 function exactObject<const E extends v.ObjectEntries>(entries: E) {
-  return v.pipe(v.unknown(), NotArray, v.strictObject(entries))
+  return v.pipe(v.unknown(), notArray, v.strictObject(entries))
 }
 
 function request<const C extends string, const A extends v.ObjectEntries>(cmd: C, args: A) {
@@ -169,9 +182,13 @@ export const HOST_ERROR_CODES = [
 ] as const
 export type HostErrorCode = (typeof HOST_ERROR_CODES)[number]
 
+// conflict lleva siempre la revisión actual del host y ningún otro código la lleva.
 export const HostErrorResponseSchema = v.strictObject({
   ok: v.literal(false),
-  error: v.strictObject({ code: v.picklist(HOST_ERROR_CODES), revision: v.optional(RevisionSchema) }),
+  error: v.pipe(
+    v.strictObject({ code: v.picklist(HOST_ERROR_CODES), revision: v.optional(RevisionSchema) }),
+    v.check((e) => (e.code === 'conflict') === (e.revision !== undefined), 'revisión no válida'),
+  ),
 })
 
 export interface HostFailure {

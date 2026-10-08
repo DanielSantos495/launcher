@@ -195,7 +195,8 @@ export function planImport(
     settings: mode === 'replace' ? incoming.settings : current.settings,
     revision: current.revision + 1,
   }
-  // Esquema completo (límites incluidos) y reglas cruzadas: fusionar puede superar LIMITS aunque cada parte sea válida.
+  // Esquema completo (límites incluidos) y reglas cruzadas:
+  // fusionar puede superar LIMITS aunque cada parte sea válida.
   const valid = parseLauncherData(data)
   if (!valid.ok) return err({ code: 'invalid', issues: valid.error })
   return ok({

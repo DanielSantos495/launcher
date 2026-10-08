@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import responsesFixture from '../fixtures/host-responses.json'
 import requestsFixture from '../fixtures/host-requests.json'
 import {
+  Base64Schema,
   HOST_COMMANDS,
   HOST_ERROR_CODES,
   HostRequestSchema,
@@ -11,6 +12,7 @@ import {
   parseHostResponse,
   type HostCommand,
 } from '../src/host'
+import { MAX_ICON_BYTES } from '../src/limits'
 
 interface RequestCase {
   name: string
@@ -48,6 +50,11 @@ describe('contrato de respuestas (host-responses.json)', () => {
     else expect(!r.ok && r.error.code !== 'bad_response').toBe(true)
   })
 
+  it('cubre cada comando con al menos una respuesta correcta', () => {
+    const covered = new Set(responses.filter((c) => (c.response as { ok: boolean }).ok).map((c) => c.cmd))
+    expect([...covered].sort()).toEqual([...HOST_COMMANDS].sort())
+  })
+
   it('una respuesta con campos de más no es válida', () => {
     expect(parseHostResponse('open', { ok: true, result: { extra: 1 } })).toEqual({
       ok: false,
@@ -74,6 +81,41 @@ describe('parseHostResponse', () => {
 
   it('un array no vale como resultado vacío', () => {
     expect(parseHostResponse('open', { ok: true, result: [] })).toEqual({ ok: false, error: { code: 'bad_response' } })
+  })
+
+  // conflict exige revision y revision solo se admite con conflict: son los cuatro casos de la combinación.
+  it.each([
+    ['conflict con revision es válido', { code: 'conflict', revision: 5 }, { code: 'conflict', revision: 5 }],
+    ['conflict sin revision no es válido', { code: 'conflict' }, { code: 'bad_response' }],
+    ['otro código con revision no es válido', { code: 'not_paired', revision: 5 }, { code: 'bad_response' }],
+    ['otro código sin revision es válido', { code: 'not_paired' }, { code: 'not_paired' }],
+  ])('%s', (_name, error, expected) => {
+    expect(parseHostResponse('sync.put', { ok: false, error })).toEqual({ ok: false, error: expected })
+  })
+})
+
+describe('Base64Schema: tamaño decodificado', () => {
+  // btoa codifica una cadena de bytes (un carácter por byte): longitud / 4 * 3 - relleno es el tamaño decodificado.
+  const base64Of = (bytes: number) => btoa('\0'.repeat(bytes))
+
+  it('admite exactamente MAX_ICON_BYTES (32768, con relleno)', () => {
+    const base64 = base64Of(MAX_ICON_BYTES)
+    expect(base64).toHaveLength(43692)
+    expect(base64.endsWith('=')).toBe(true)
+    expect(v.safeParse(Base64Schema, base64).success).toBe(true)
+  })
+
+  it('rechaza 32769 bytes aunque la longitud (43692, sin relleno) cabe en el tope de caracteres', () => {
+    const base64 = base64Of(MAX_ICON_BYTES + 1)
+    expect(base64).toHaveLength(43692)
+    expect(base64.endsWith('=')).toBe(false)
+    expect(v.safeParse(Base64Schema, base64).success).toBe(false)
+  })
+
+  it('admite 32767 bytes (dos caracteres de relleno)', () => {
+    const base64 = base64Of(MAX_ICON_BYTES - 1)
+    expect(base64.endsWith('==')).toBe(true)
+    expect(v.safeParse(Base64Schema, base64).success).toBe(true)
   })
 })
 
