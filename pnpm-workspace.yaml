@@ -1,0 +1,11 @@
+packages:
+  - packages/*
+  - apps/*
+
+# Cadena de suministro (T8): versiones exactas, un día de espera tras cada publicación,
+# sin scripts de instalación de dependencias salvo los aprobados en allowBuilds.
+saveExact: true
+minimumReleaseAge: 1440
+strictDepBuilds: true
+blockExoticSubdeps: true
+trustPolicy: no-downgrade

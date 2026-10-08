@@ -2,3 +2,8 @@
 *.pem
 spike/host/bin/
 spike/host/host.log
+node_modules/
+coverage/
+.output/
+.wxt/
+dist/

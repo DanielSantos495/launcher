@@ -1,0 +1,31 @@
+{
+  "name": "account-launcher",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Launcher de cuentas por identidad para Brave, Chrome y Edge",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@11.2.2",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "typecheck": "tsc -p packages/core/tsconfig.json && tsc -p packages/protocol/tsconfig.json",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm coverage"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@vitest/coverage-v8": "5.0.3",
+    "eslint": "10.12.0",
+    "globals": "17.13.0",
+    "prettier": "3.9.9",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.1",
+    "vitest": "5.0.3"
+  }
+}

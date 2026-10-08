@@ -1,0 +1,12 @@
+{
+  "name": "@account-launcher/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "valibot": "1.5.0"
+  }
+}
