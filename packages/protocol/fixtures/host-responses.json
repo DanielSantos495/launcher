@@ -1,0 +1,79 @@
+[
+  {
+    "name": "ping",
+    "cmd": "ping",
+    "response": {
+      "ok": true,
+      "result": {
+        "hostVersion": "0.1.0",
+        "protocol": 1,
+        "browser": "brave",
+        "browserVersion": "1.96.61",
+        "features": { "temporaryContainer": true }
+      }
+    }
+  },
+  {
+    "name": "listProfiles",
+    "cmd": "listProfiles",
+    "response": {
+      "ok": true,
+      "result": {
+        "profiles": [
+          { "directory": "Default", "name": "Trabajo", "isUsingDefaultName": false, "color": "#1f6feb" },
+          { "directory": "Launcher-1a2b3c4d", "name": "Personal", "isUsingDefaultName": true }
+        ]
+      }
+    }
+  },
+  { "name": "open", "cmd": "open", "response": { "ok": true, "result": {} } },
+  {
+    "name": "createProfile",
+    "cmd": "createProfile",
+    "response": { "ok": true, "result": { "directory": "Launcher-1a2b3c4d" } }
+  },
+  {
+    "name": "pair.start primera vez",
+    "cmd": "pair.start",
+    "response": {
+      "ok": true,
+      "result": {
+        "code": "042913",
+        "expiresAt": "2026-10-07T12:02:00.000Z",
+        "token": "abcdefghijABCDEFGHIJ0123456789_-abcdefghijk"
+      }
+    }
+  },
+  {
+    "name": "pair.list",
+    "cmd": "pair.list",
+    "response": {
+      "ok": true,
+      "result": {
+        "maxPairedProfiles": 2,
+        "installations": [
+          {
+            "installationId": "inst-a",
+            "identityId": "id-work",
+            "profileDirectory": "Default",
+            "pairedAt": "2026-10-07T12:00:00.000Z",
+            "verifiedAt": "2026-10-07T12:00:05.000Z",
+            "self": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "sync.get sin datos",
+    "cmd": "sync.get",
+    "response": { "ok": true, "result": { "revision": 0, "data": null, "bindings": {} } }
+  },
+  { "name": "sync.put", "cmd": "sync.put", "response": { "ok": true, "result": { "revision": 4 } } },
+  {
+    "name": "conflicto",
+    "cmd": "sync.put",
+    "response": { "ok": false, "error": { "code": "conflict", "revision": 5 } }
+  },
+  { "name": "no emparejado", "cmd": "sync.get", "response": { "ok": false, "error": { "code": "not_paired" } } }
+]

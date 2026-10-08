@@ -1,0 +1,330 @@
+[
+  { "name": "ping", "valid": true, "request": { "v": 1, "cmd": "ping", "args": {} } },
+  { "name": "listProfiles", "valid": true, "request": { "v": 1, "cmd": "listProfiles", "args": {} } },
+  {
+    "name": "open",
+    "valid": true,
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://github.com/" } }
+  },
+  {
+    "name": "open con consulta codificada",
+    "valid": true,
+    "request": {
+      "v": 1,
+      "cmd": "open",
+      "args": {
+        "profileDirectory": "Launcher-1a2b3c4d",
+        "url": "https://mail.google.com/mail/?authuser=ana%40example.com"
+      }
+    }
+  },
+  {
+    "name": "openTemporary sin nombre",
+    "valid": true,
+    "request": {
+      "v": 1,
+      "cmd": "openTemporary",
+      "args": { "profileDirectory": "Profile 1", "url": "https://example.com/" }
+    }
+  },
+  {
+    "name": "openTemporary con nombre con tilde",
+    "valid": true,
+    "request": {
+      "v": 1,
+      "cmd": "openTemporary",
+      "args": { "profileDirectory": "Profile 1", "url": "https://example.com/", "name": "Trabajo rápido" }
+    }
+  },
+  { "name": "createProfile", "valid": true, "request": { "v": 1, "cmd": "createProfile", "args": {} } },
+  {
+    "name": "pair.start primera vez",
+    "valid": true,
+    "request": { "v": 1, "cmd": "pair.start", "args": { "installationId": "inst-a" } }
+  },
+  {
+    "name": "pair.start ya emparejado",
+    "valid": true,
+    "request": {
+      "v": 1,
+      "cmd": "pair.start",
+      "args": { "installationId": "inst-a", "token": "abcdefghijABCDEFGHIJ0123456789_-abcdefghijk" }
+    }
+  },
+  {
+    "name": "pair.join",
+    "valid": true,
+    "request": { "v": 1, "cmd": "pair.join", "args": { "installationId": "inst-b", "code": "042913" } }
+  },
+  {
+    "name": "pair.declare",
+    "valid": true,
+    "request": {
+      "v": 1,
+      "cmd": "pair.declare",
+      "args": {
+        "token": "abcdefghijABCDEFGHIJ0123456789_-abcdefghijk",
+        "profileDirectory": "Profile 1",
+        "identityId": "id-home"
+      }
+    }
+  },
+  {
+    "name": "pair.list",
+    "valid": true,
+    "request": { "v": 1, "cmd": "pair.list", "args": { "token": "abcdefghijABCDEFGHIJ0123456789_-abcdefghijk" } }
+  },
+  {
+    "name": "pair.remove",
+    "valid": true,
+    "request": {
+      "v": 1,
+      "cmd": "pair.remove",
+      "args": { "token": "abcdefghijABCDEFGHIJ0123456789_-abcdefghijk", "installationId": "inst-b" }
+    }
+  },
+  {
+    "name": "pair.verify",
+    "valid": true,
+    "request": { "v": 1, "cmd": "pair.verify", "args": { "token": "abcdefghijABCDEFGHIJ0123456789_-abcdefghijk" } }
+  },
+  {
+    "name": "pair.prove",
+    "valid": true,
+    "request": {
+      "v": 1,
+      "cmd": "pair.prove",
+      "args": { "token": "abcdefghijABCDEFGHIJ0123456789_-abcdefghijk", "nonce": "step0-nonce-0001" }
+    }
+  },
+  {
+    "name": "sync.get",
+    "valid": true,
+    "request": { "v": 1, "cmd": "sync.get", "args": { "token": "abcdefghijABCDEFGHIJ0123456789_-abcdefghijk" } }
+  },
+  {
+    "name": "sync.put",
+    "valid": true,
+    "request": {
+      "v": 1,
+      "cmd": "sync.put",
+      "args": {
+        "token": "abcdefghijABCDEFGHIJ0123456789_-abcdefghijk",
+        "baseRevision": 0,
+        "data": {
+          "schemaVersion": 1,
+          "revision": 0,
+          "identities": [],
+          "groups": [],
+          "accounts": [],
+          "customServices": [],
+          "settings": {
+            "mode": "multi",
+            "language": "auto",
+            "defaultView": "identity",
+            "theme": "system",
+            "allowHttp": false
+          }
+        },
+        "bindings": { "id-home": { "kind": "chromium-profile", "profileDirectory": "Profile 1" } }
+      }
+    }
+  },
+  {
+    "name": "icons.get",
+    "valid": true,
+    "request": {
+      "v": 1,
+      "cmd": "icons.get",
+      "args": { "token": "abcdefghijABCDEFGHIJ0123456789_-abcdefghijk", "key": "icon:gh1" }
+    }
+  },
+  {
+    "name": "icons.put",
+    "valid": true,
+    "request": {
+      "v": 1,
+      "cmd": "icons.put",
+      "args": {
+        "token": "abcdefghijABCDEFGHIJ0123456789_-abcdefghijk",
+        "key": "icon:gh1",
+        "mime": "image/png",
+        "base64": "iVBORw0KGgo="
+      }
+    }
+  },
+  {
+    "name": "icons.delete",
+    "valid": true,
+    "request": {
+      "v": 1,
+      "cmd": "icons.delete",
+      "args": { "token": "abcdefghijABCDEFGHIJ0123456789_-abcdefghijk", "key": "icon:gh1" }
+    }
+  },
+  {
+    "name": "versión 2",
+    "valid": false,
+    "error": "unsupported_version",
+    "request": { "v": 2, "cmd": "ping", "args": {} }
+  },
+  { "name": "sin versión", "valid": false, "error": "unsupported_version", "request": { "cmd": "ping", "args": {} } },
+  {
+    "name": "comando desconocido",
+    "valid": false,
+    "error": "unknown_command",
+    "request": { "v": 1, "cmd": "exec", "args": {} }
+  },
+  { "name": "cmd no es texto", "valid": false, "error": "bad_request", "request": { "v": 1, "cmd": 5, "args": {} } },
+  {
+    "name": "args no es objeto",
+    "valid": false,
+    "error": "bad_request",
+    "request": { "v": 1, "cmd": "ping", "args": [] }
+  },
+  {
+    "name": "campo de más arriba",
+    "valid": false,
+    "error": "bad_request",
+    "request": { "v": 1, "cmd": "ping", "args": {}, "exe": "/bin/sh" }
+  },
+  {
+    "name": "argumento de más",
+    "valid": false,
+    "error": "bad_request",
+    "request": {
+      "v": 1,
+      "cmd": "open",
+      "args": { "profileDirectory": "Default", "url": "https://github.com/", "container": "Work" }
+    }
+  },
+  {
+    "name": "url javascript",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "javascript:alert(1)" } }
+  },
+  {
+    "name": "url con usuario",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://a:b@example.com/" } }
+  },
+  {
+    "name": "url no canónica",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://github.com" } }
+  },
+  {
+    "name": "url con salto de línea",
+    "valid": false,
+    "error": "bad_url",
+    "request": {
+      "v": 1,
+      "cmd": "open",
+      "args": { "profileDirectory": "Default", "url": "https://example.com/\n--incognito" }
+    }
+  },
+  {
+    "name": "url que empieza por guion",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "--incognito" } }
+  },
+  {
+    "name": "url file",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "file:///etc/passwd" } }
+  },
+  {
+    "name": "carpeta con ruta",
+    "valid": false,
+    "error": "bad_request",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "../Default", "url": "https://github.com/" } }
+  },
+  {
+    "name": "carpeta con guion",
+    "valid": false,
+    "error": "bad_request",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "--incognito", "url": "https://github.com/" } }
+  },
+  {
+    "name": "nombre con igual",
+    "valid": false,
+    "error": "bad_name",
+    "request": {
+      "v": 1,
+      "cmd": "openTemporary",
+      "args": { "profileDirectory": "Profile 1", "url": "https://example.com/", "name": "a=b" }
+    }
+  },
+  {
+    "name": "nombre con guion inicial",
+    "valid": false,
+    "error": "bad_name",
+    "request": {
+      "v": 1,
+      "cmd": "openTemporary",
+      "args": { "profileDirectory": "Profile 1", "url": "https://example.com/", "name": "--incognito" }
+    }
+  },
+  {
+    "name": "nombre en blanco",
+    "valid": false,
+    "error": "bad_name",
+    "request": {
+      "v": 1,
+      "cmd": "openTemporary",
+      "args": { "profileDirectory": "Profile 1", "url": "https://example.com/", "name": "   " }
+    }
+  },
+  {
+    "name": "nombre con control",
+    "valid": false,
+    "error": "bad_name",
+    "request": {
+      "v": 1,
+      "cmd": "openTemporary",
+      "args": { "profileDirectory": "Profile 1", "url": "https://example.com/", "name": "a\u0007b" }
+    }
+  },
+  {
+    "name": "código de 5 cifras",
+    "valid": false,
+    "error": "bad_request",
+    "request": { "v": 1, "cmd": "pair.join", "args": { "installationId": "inst-b", "code": "12345" } }
+  },
+  {
+    "name": "nonce corto",
+    "valid": false,
+    "error": "bad_request",
+    "request": {
+      "v": 1,
+      "cmd": "pair.prove",
+      "args": { "token": "abcdefghijABCDEFGHIJ0123456789_-abcdefghijk", "nonce": "corto" }
+    }
+  },
+  {
+    "name": "token corto",
+    "valid": false,
+    "error": "bad_request",
+    "request": { "v": 1, "cmd": "sync.get", "args": { "token": "abc" } }
+  },
+  {
+    "name": "icono svg",
+    "valid": false,
+    "error": "bad_request",
+    "request": {
+      "v": 1,
+      "cmd": "icons.put",
+      "args": {
+        "token": "abcdefghijABCDEFGHIJ0123456789_-abcdefghijk",
+        "key": "icon:gh1",
+        "mime": "image/svg+xml",
+        "base64": "PHN2Zz4="
+      }
+    }
+  }
+]
