@@ -14,7 +14,9 @@ export interface UrlPolicy {
 const PRINTABLE_ASCII = /^[\x21-\x7e]+$/
 
 // normalizeUrl valida una URL que se va a abrir y devuelve su forma canónica.
-// Los caracteres de control se rechazan antes de parsear: el parser WHATWG eliminaría tabuladores y saltos de línea sin avisar.
+// trim() quita los espacios, tabuladores y saltos de línea de los extremos; el resto de caracteres de control
+// (los internos y los demás de los extremos) se rechaza antes de parsear, porque el parser WHATWG eliminaría
+// tabuladores y saltos de línea sin avisar.
 export function normalizeUrl(input: string, policy: UrlPolicy): Result<string, UrlError> {
   const raw = input.trim()
   if (raw === '') return err('invalid')

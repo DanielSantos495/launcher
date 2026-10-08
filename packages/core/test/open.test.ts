@@ -29,6 +29,24 @@ describe('resolveTarget', () => {
     })
   })
 
+  it('un "Abrir como…" explícito gana a la excepción de la cuenta', () => {
+    const ctx = { data: data({ identities: people, settings: multi }), bindings }
+    const pinned = account({ contextOverride: 'current' })
+    expect(resolveTarget(ctx, pinned)).toEqual({ kind: 'current' })
+    expect(resolveTarget(ctx, pinned, 'id-home')).toEqual({
+      kind: 'chromium-profile',
+      profileDirectory: 'Launcher-home0001',
+    })
+    // La excepción solo cede ante una identidad explícita: con "Abrir como…" sin vínculo se abre en el actual.
+    expect(resolveTarget({ ...ctx, bindings: {} }, pinned, 'id-home')).toEqual({ kind: 'current' })
+  })
+
+  it('en "Perfil único" ignora también "Abrir como…"', () => {
+    const ctx = { data: data({ identities: people }), bindings }
+    expect(resolveTarget(ctx, account(), 'id-home')).toEqual({ kind: 'current' })
+    expect(resolveTarget(ctx, account({ contextOverride: 'current' }), 'id-home')).toEqual({ kind: 'current' })
+  })
+
   it('sin vínculo usa el perfil actual', () => {
     const ctx = { data: data({ identities: people, settings: multi }), bindings: {} }
     expect(resolveTarget(ctx, account())).toEqual({ kind: 'current' })
@@ -57,6 +75,21 @@ describe('isolationWarnings', () => {
     const gmailB = account({ id: 'g2', serviceId: 'google.gmail', identityId: 'id-home' })
     const single = { data: data({ identities: people, accounts: [gmailA, gmailB] }), bindings }
     expect(isolationWarnings(single, gmailA)).toEqual([])
+  })
+
+  it('con "Abrir como…" avisa según el perfil de destino, no el de la identidad de la cuenta', () => {
+    const ctx = { data: data({ identities: people, accounts: [claudeWork, claudeHome], settings: multi }), bindings }
+    // Cada identidad tiene su perfil: abierta con la suya no hay conflicto, abierta como la otra sí.
+    expect(isolationWarnings(ctx, claudeWork)).toEqual([])
+    expect(isolationWarnings(ctx, claudeWork, 'id-work')).toEqual([])
+    expect(isolationWarnings(ctx, claudeWork, 'id-home').map((a) => a.id)).toEqual(['acc-ch'])
+  })
+
+  it('"Abrir como…" gana a la excepción de la cuenta también en el aviso', () => {
+    const pinned = account({ id: 'acc-cw', serviceId: 'claude', contextOverride: 'current' })
+    const ctx = { data: data({ identities: people, accounts: [pinned, claudeHome], settings: multi }), bindings }
+    expect(isolationWarnings(ctx, pinned)).toEqual([])
+    expect(isolationWarnings(ctx, pinned, 'id-home').map((a) => a.id)).toEqual(['acc-ch'])
   })
 
   it('avisa si dos identidades comparten perfil o si ambas caen en el perfil actual', () => {

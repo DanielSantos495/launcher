@@ -174,8 +174,13 @@ export const BindingSchema = v.variant('kind', [
   v.strictObject({ kind: v.literal('current') }),
 ])
 
+// Valibot trata una lista como un objeto cuando no hay entradas obligatorias (`[]` pasa por un registro o por un
+// objeto con todo opcional) y v.record acepta `[x]` con la clave "0": las entradas externas se guardan con esto.
+export const notArray = v.check((input: unknown) => !Array.isArray(input), 'se esperaba un objeto')
+
 export const BindingsSchema = v.pipe(
   v.unknown(),
+  notArray,
   // v.record omite estas claves antes de validarlas: se rechazan aquí, sobre la entrada.
   v.check(
     (input) => typeof input !== 'object' || input === null || !RESERVED_IDS.some((key) => Object.hasOwn(input, key)),

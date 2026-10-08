@@ -130,6 +130,22 @@ describe('niveles de puntuación y casos límite', () => {
     expect(new Set(hits.map(([, score]) => score)).size).toBe(1)
     expect(hits.map(([id]) => id)).toEqual(['a', 'b', 'c'])
   })
+
+  it('con puntuación y etiqueta equivalentes desempata por id, sea cual sea el orden de entrada', () => {
+    // "Árbol" y "arbol" empatan en texto (sin tildes ni mayúsculas) y en puntuación.
+    const accented = account({ id: 'a-1', label: 'Árbol', serviceId: 'generic' })
+    const plain = account({ id: 'z-1', label: 'arbol', serviceId: 'generic' })
+    expect(scored([accented, plain], 'arbol').map(([id]) => id)).toEqual(['a-1', 'z-1'])
+    expect(scored([plain, accented], 'arbol').map(([id]) => id)).toEqual(['a-1', 'z-1'])
+    expect(scored([plain, accented], '').map(([id]) => id)).toEqual(['a-1', 'z-1'])
+  })
+
+  it('ordena los números de la etiqueta por su valor: "cuenta 2" va antes que "cuenta 10"', () => {
+    const list = [account({ id: 'a', label: 'Cuenta 10' }), account({ id: 'b', label: 'Cuenta 2' })]
+    const hits = scored(list, 'cuenta')
+    expect(new Set(hits.map(([, score]) => score)).size).toBe(1)
+    expect(hits.map(([id]) => id)).toEqual(['b', 'a'])
+  })
 })
 
 describe('puntuaciones exactas, consulta acotada y límites', () => {

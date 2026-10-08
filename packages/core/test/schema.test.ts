@@ -229,6 +229,8 @@ describe('BindingsSchema', () => {
     ],
     ['clave no válida', { 'con espacio': { kind: 'current' } }],
     ['no es un objeto', 'texto'],
+    ['una lista vacía', []],
+    ['una lista con un vínculo', [{ kind: 'current' }]],
   ])('rechaza %s', (_name, input) => {
     expect(v.safeParse(BindingsSchema, input).success).toBe(false)
   })

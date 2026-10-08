@@ -1,8 +1,17 @@
 import * as v from 'valibot'
 import { describe, expect, it } from 'vitest'
 import { applyOps, OpSchema } from '../src/ops'
-import { LIMITS } from '../src/schema'
-import { account, data, group, identity, T1 } from './fixtures'
+import { createEmptyData, LIMITS } from '../src/schema'
+import { account, data, group, identity, T0, T1 } from './fixtures'
+
+const slack = {
+  id: 'slack',
+  name: 'Slack',
+  urlTemplate: 'https://{username}.slack.com/',
+  multiAccount: 'parallel' as const,
+  createdAt: T1,
+  updatedAt: T1,
+}
 
 describe('applyOps', () => {
   it('crea y reemplaza por id, y sube la revisión', () => {
@@ -48,6 +57,24 @@ describe('applyOps', () => {
     expect(r.ok && r.value.accounts[0]?.groupId).toBeNull()
   })
 
+  it('al borrar un grupo solo suelta las cuentas de ese grupo', () => {
+    const d = data({
+      groups: [group(), group({ id: 'grp-ocio', name: 'Ocio' })],
+      accounts: [
+        account({ id: 'acc-dev', groupId: 'grp-dev' }),
+        account({ id: 'acc-ocio', groupId: 'grp-ocio' }),
+        account({ id: 'acc-sin', groupId: null }),
+      ],
+    })
+    const r = applyOps(d, [{ type: 'group.delete', id: 'grp-dev' }])
+    expect(r.ok && r.value.groups.map((g) => g.id)).toEqual(['grp-ocio'])
+    expect(r.ok && r.value.accounts.map((a) => [a.id, a.groupId])).toEqual([
+      ['acc-dev', null],
+      ['acc-ocio', 'grp-ocio'],
+      ['acc-sin', null],
+    ])
+  })
+
   it('rechaza una cuenta con identidad desconocida', () => {
     const r = applyOps(data(), [{ type: 'account.put', account: account({ identityId: 'otra' }) }])
     expect(r.ok).toBe(false)
@@ -59,17 +86,16 @@ describe('applyOps', () => {
     expect(r.ok && r.value.accounts[0]?.lastOpenedAt).toBe(T1)
   })
 
+  it('marca solo la cuenta indicada y deja la otra igual', () => {
+    const first = account({ id: 'acc-1', lastOpenedAt: T0 })
+    const second = account({ id: 'acc-2', label: 'Otra' })
+    const r = applyOps(data({ accounts: [first, second] }), [{ type: 'account.touch', id: 'acc-2', at: T1 }])
+    expect(r.ok && r.value.accounts).toEqual([first, { ...second, lastOpenedAt: T1 }])
+  })
+
   it('no borra un servicio personalizado en uso', () => {
-    const service = {
-      id: 'slack',
-      name: 'Slack',
-      urlTemplate: 'https://{username}.slack.com/',
-      multiAccount: 'parallel' as const,
-      createdAt: T1,
-      updatedAt: T1,
-    }
     const d = data({
-      customServices: [service],
+      customServices: [slack],
       accounts: [account({ serviceId: 'custom:slack', username: 'acme' })],
     })
     expect(applyOps(d, [{ type: 'customService.delete', id: 'slack' }])).toEqual({
@@ -85,15 +111,6 @@ describe('applyOps', () => {
 })
 
 describe('applyOps: casos adicionales', () => {
-  const slack = {
-    id: 'slack',
-    name: 'Slack',
-    urlTemplate: 'https://{username}.slack.com/',
-    multiAccount: 'parallel' as const,
-    createdAt: T1,
-    updatedAt: T1,
-  }
-
   it('sube la revisión a partir de la actual', () => {
     const r = applyOps(data({ revision: 7 }), [{ type: 'identity.put', identity: identity({ label: 'Otra' }) }])
     expect(r.ok && r.value.revision).toBe(8)
@@ -155,6 +172,17 @@ describe('applyOps: casos adicionales', () => {
     expect(d).toEqual(before)
   })
 
+  it('con el culpable en la posición 0 informa de la última operación (el plan fija esa semántica)', () => {
+    const r = applyOps(data(), [
+      { type: 'account.put', account: account({ identityId: 'otra' }) },
+      { type: 'identity.put', identity: identity({ id: 'id-home' }) },
+    ])
+    expect(r).toEqual({
+      ok: false,
+      error: { code: 'invalid', op: 1, issues: ['accounts.acc-github: identidad desconocida'] },
+    })
+  })
+
   it('rechaza un resultado que supera los límites del esquema', () => {
     const accounts = Array.from({ length: LIMITS.accounts }, (_, i) => account({ id: `acc-${String(i)}` }))
     const full = data({ accounts })
@@ -170,6 +198,21 @@ describe('applyOps: casos adicionales', () => {
   it('rechaza una forma de campo que solo el esquema detecta', () => {
     const r = applyOps(data(), [{ type: 'identity.put', identity: identity({ id: 'id-home', label: '  ' }) }])
     expect(r).toEqual({ ok: false, error: { code: 'invalid', op: 0, issues: ['identities.1.label: check'] } })
+  })
+
+  it.each([
+    ['language', { language: 'es' }],
+    ['defaultView', { defaultView: 'group' }],
+    ['theme', { theme: 'dark' }],
+  ] as const)('cambia %s y conserva el resto de ajustes', (_name, patch) => {
+    const r = applyOps(data(), [{ type: 'settings.set', settings: patch }])
+    expect(r.ok && r.value.settings).toEqual({ ...data().settings, ...patch })
+  })
+
+  it('un false explícito sustituye a un true actual', () => {
+    const current = { ...createEmptyData().settings, allowHttp: true }
+    const r = applyOps(data({ settings: current }), [{ type: 'settings.set', settings: { allowHttp: false } }])
+    expect(r.ok && r.value.settings).toEqual({ ...current, allowHttp: false })
   })
 
   it('un ajuste undefined conserva el valor actual', () => {
@@ -189,9 +232,19 @@ describe('OpSchema', () => {
     expect(v.safeParse(OpSchema, { type: 'settings.set', settings: {} }).success).toBe(true)
   })
 
-  it('rechaza ids reservados, fechas no canónicas y ajustes desconocidos', () => {
+  it('rechaza ids reservados', () => {
     expect(v.safeParse(OpSchema, { type: 'account.delete', id: '__proto__' }).success).toBe(false)
+  })
+
+  it('rechaza fechas no canónicas', () => {
     expect(v.safeParse(OpSchema, { type: 'account.touch', id: 'x', at: '2026-10-08T12:00:00Z' }).success).toBe(false)
+  })
+
+  it('rechaza ajustes desconocidos', () => {
     expect(v.safeParse(OpSchema, { type: 'settings.set', settings: { desconocido: true } }).success).toBe(false)
+  })
+
+  it('rechaza una lista como ajustes', () => {
+    expect(v.safeParse(OpSchema, { type: 'settings.set', settings: [] }).success).toBe(false)
   })
 })

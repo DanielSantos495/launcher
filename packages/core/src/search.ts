@@ -1,3 +1,4 @@
+import { compareId, compareText } from './compare'
 import type { Account, LauncherData } from './schema'
 import { serviceInfo } from './services'
 
@@ -88,6 +89,9 @@ export function searchAccounts(data: LauncherData, query: string, options: Searc
     }
     hits.push({ account, score })
   }
-  hits.sort((a, b) => b.score - a.score || a.account.label.localeCompare(b.account.label))
+  hits.sort(
+    (a, b) =>
+      b.score - a.score || compareText(a.account.label, b.account.label) || compareId(a.account.id, b.account.id),
+  )
   return hits.slice(0, clampLimit(options.limit))
 }

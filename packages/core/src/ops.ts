@@ -6,6 +6,7 @@ import {
   GroupSchema,
   IdentitySchema,
   IdSchema,
+  notArray,
   parseLauncherData,
   SettingsSchema,
   TimestampSchema,
@@ -25,7 +26,10 @@ export const OpSchema = v.variant('type', [
   v.strictObject({ type: v.literal('account.touch'), id: IdSchema, at: TimestampSchema }),
   v.strictObject({ type: v.literal('customService.put'), service: CustomServiceSchema }),
   v.strictObject({ type: v.literal('customService.delete'), id: IdSchema }),
-  v.strictObject({ type: v.literal('settings.set'), settings: v.partial(SettingsSchema) }),
+  v.strictObject({
+    type: v.literal('settings.set'),
+    settings: v.pipe(v.unknown(), notArray, v.partial(SettingsSchema)),
+  }),
 ])
 
 export type Op = v.InferOutput<typeof OpSchema>

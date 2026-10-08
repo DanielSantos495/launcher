@@ -1,5 +1,6 @@
 export * from './result'
 export * from './text'
+export * from './compare'
 export * from './url'
 export * from './schema'
 export * from './template'
