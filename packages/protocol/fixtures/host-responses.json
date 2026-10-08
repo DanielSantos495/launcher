@@ -100,5 +100,33 @@
   },
   { "name": "icons.put", "cmd": "icons.put", "response": { "ok": true, "result": {} } },
   { "name": "icons.delete", "cmd": "icons.delete", "response": { "ok": true, "result": {} } },
-  { "name": "no emparejado", "cmd": "sync.get", "response": { "ok": false, "error": { "code": "not_paired" } } }
+  { "name": "no emparejado", "cmd": "sync.get", "response": { "ok": false, "error": { "code": "not_paired" } } },
+  {
+    "name": "sync.get con datos y vínculos",
+    "cmd": "sync.get",
+    "response": {
+      "ok": true,
+      "result": {
+        "revision": 4,
+        "data": {
+          "schemaVersion": 1,
+          "revision": 3,
+          "identities": [],
+          "groups": [],
+          "accounts": [],
+          "customServices": [],
+          "settings": {
+            "mode": "multi",
+            "language": "auto",
+            "defaultView": "identity",
+            "theme": "system",
+            "allowHttp": false
+          }
+        },
+        "bindings": {
+          "id-home": { "kind": "chromium-profile", "profileDirectory": "Profile 1", "desiredName": "Casa" }
+        }
+      }
+    }
+  }
 ]

@@ -609,5 +609,330 @@
         "bindings": { "id-home": { "kind": "chromium-profile", "profileDirectory": "Profile 1" } }
       }
     }
+  },
+  {
+    "name": "url con % mal formado",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://example.com/%zz" } }
+  },
+  {
+    "name": "url con % al final",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://example.com/%" } }
+  },
+  {
+    "name": "url con %7e en minúsculas",
+    "valid": true,
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://example.com/%7e" } }
+  },
+  {
+    "name": "url con llaves en la ruta",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://example.com/{x}" } }
+  },
+  {
+    "name": "url con comillas en la ruta",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://example.com/a\"b" } }
+  },
+  {
+    "name": "url con < y > en la ruta",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://example.com/<x>" } }
+  },
+  {
+    "name": "url con acento grave en la ruta",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://example.com/`x" } }
+  },
+  {
+    "name": "url con apóstrofo en la consulta",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://example.com/?q='" } }
+  },
+  {
+    "name": "url con comillas en la consulta",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://example.com/?q=\"" } }
+  },
+  {
+    "name": "url con acento grave en el fragmento",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://example.com/#a`b" } }
+  },
+  {
+    "name": "url con IPv4 con cero a la izquierda",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://010.0.0.1/" } }
+  },
+  {
+    "name": "url con IPv4 hexadecimal",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://0x7f.0.0.1/" } }
+  },
+  {
+    "name": "url con IPv4 de tres partes",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://1.2.3/" } }
+  },
+  {
+    "name": "url con puerto con cero a la izquierda",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://example.com:0443/" } }
+  },
+  {
+    "name": "url con puerto vacío",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://example.com:/" } }
+  },
+  {
+    "name": "url con IPv6",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://[::1]/" } }
+  },
+  {
+    "name": "url con llaves en la consulta",
+    "valid": true,
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://example.com/?q={x}" } }
+  },
+  {
+    "name": "url con ^ en la ruta",
+    "valid": true,
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://example.com/^x" } }
+  },
+  {
+    "name": "url con | en la ruta",
+    "valid": true,
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://example.com/|x" } }
+  },
+  {
+    "name": "V en mayúsculas",
+    "valid": false,
+    "error": "unsupported_version",
+    "request": { "V": 1, "cmd": "ping", "args": {} }
+  },
+  {
+    "name": "CMD en mayúsculas",
+    "valid": false,
+    "error": "bad_request",
+    "request": { "v": 1, "CMD": "ping", "args": {} }
+  },
+  {
+    "name": "Args en lugar de args",
+    "valid": false,
+    "error": "bad_request",
+    "request": { "v": 1, "cmd": "ping", "Args": {} }
+  },
+  {
+    "name": "open con URL en lugar de url",
+    "valid": false,
+    "error": "bad_request",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "URL": "https://github.com/" } }
+  },
+  {
+    "name": "open con url válida y URL de más",
+    "valid": false,
+    "error": "bad_request",
+    "request": {
+      "v": 1,
+      "cmd": "open",
+      "args": { "profileDirectory": "Default", "url": "https://github.com/", "URL": "--x" }
+    }
+  },
+  {
+    "name": "orden: v 2 y cmd que no es texto",
+    "valid": false,
+    "error": "unsupported_version",
+    "request": { "v": 2, "cmd": 5 }
+  },
+  {
+    "name": "orden: comando desconocido y args array",
+    "valid": false,
+    "error": "unknown_command",
+    "request": { "v": 1, "cmd": "exec", "args": [] }
+  },
+  {
+    "name": "orden: carpeta y url no válidas",
+    "valid": false,
+    "error": "bad_request",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "../x", "url": "javascript:x" } }
+  },
+  {
+    "name": "orden: url no válida y campo desconocido",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "javascript:x", "extra": 1 } }
+  },
+  {
+    "name": "orden: url válida y nombre no válido",
+    "valid": false,
+    "error": "bad_name",
+    "request": {
+      "v": 1,
+      "cmd": "openTemporary",
+      "args": { "profileDirectory": "Profile 1", "url": "https://example.com/", "name": "-x" }
+    }
+  },
+  {
+    "name": "orden: url no válida y nombre que no es texto",
+    "valid": false,
+    "error": "bad_url",
+    "request": {
+      "v": 1,
+      "cmd": "openTemporary",
+      "args": { "profileDirectory": "Profile 1", "url": "javascript:x", "name": 5 }
+    }
+  },
+  {
+    "name": "orden: url que no es texto",
+    "valid": false,
+    "error": "bad_request",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": 5 } }
+  },
+  {
+    "name": "sync.put con 101 vínculos",
+    "valid": false,
+    "error": "bad_request",
+    "request": {
+      "v": 1,
+      "cmd": "sync.put",
+      "args": {
+        "token": "abcdefghijABCDEFGHIJ0123456789_-abcdefghijk",
+        "baseRevision": 0,
+        "data": {
+          "schemaVersion": 1,
+          "revision": 0,
+          "identities": [],
+          "groups": [],
+          "accounts": [],
+          "customServices": [],
+          "settings": {
+            "mode": "multi",
+            "language": "auto",
+            "defaultView": "identity",
+            "theme": "system",
+            "allowHttp": false
+          }
+        },
+        "bindings": {
+          "id-0": { "kind": "current" },
+          "id-1": { "kind": "current" },
+          "id-2": { "kind": "current" },
+          "id-3": { "kind": "current" },
+          "id-4": { "kind": "current" },
+          "id-5": { "kind": "current" },
+          "id-6": { "kind": "current" },
+          "id-7": { "kind": "current" },
+          "id-8": { "kind": "current" },
+          "id-9": { "kind": "current" },
+          "id-10": { "kind": "current" },
+          "id-11": { "kind": "current" },
+          "id-12": { "kind": "current" },
+          "id-13": { "kind": "current" },
+          "id-14": { "kind": "current" },
+          "id-15": { "kind": "current" },
+          "id-16": { "kind": "current" },
+          "id-17": { "kind": "current" },
+          "id-18": { "kind": "current" },
+          "id-19": { "kind": "current" },
+          "id-20": { "kind": "current" },
+          "id-21": { "kind": "current" },
+          "id-22": { "kind": "current" },
+          "id-23": { "kind": "current" },
+          "id-24": { "kind": "current" },
+          "id-25": { "kind": "current" },
+          "id-26": { "kind": "current" },
+          "id-27": { "kind": "current" },
+          "id-28": { "kind": "current" },
+          "id-29": { "kind": "current" },
+          "id-30": { "kind": "current" },
+          "id-31": { "kind": "current" },
+          "id-32": { "kind": "current" },
+          "id-33": { "kind": "current" },
+          "id-34": { "kind": "current" },
+          "id-35": { "kind": "current" },
+          "id-36": { "kind": "current" },
+          "id-37": { "kind": "current" },
+          "id-38": { "kind": "current" },
+          "id-39": { "kind": "current" },
+          "id-40": { "kind": "current" },
+          "id-41": { "kind": "current" },
+          "id-42": { "kind": "current" },
+          "id-43": { "kind": "current" },
+          "id-44": { "kind": "current" },
+          "id-45": { "kind": "current" },
+          "id-46": { "kind": "current" },
+          "id-47": { "kind": "current" },
+          "id-48": { "kind": "current" },
+          "id-49": { "kind": "current" },
+          "id-50": { "kind": "current" },
+          "id-51": { "kind": "current" },
+          "id-52": { "kind": "current" },
+          "id-53": { "kind": "current" },
+          "id-54": { "kind": "current" },
+          "id-55": { "kind": "current" },
+          "id-56": { "kind": "current" },
+          "id-57": { "kind": "current" },
+          "id-58": { "kind": "current" },
+          "id-59": { "kind": "current" },
+          "id-60": { "kind": "current" },
+          "id-61": { "kind": "current" },
+          "id-62": { "kind": "current" },
+          "id-63": { "kind": "current" },
+          "id-64": { "kind": "current" },
+          "id-65": { "kind": "current" },
+          "id-66": { "kind": "current" },
+          "id-67": { "kind": "current" },
+          "id-68": { "kind": "current" },
+          "id-69": { "kind": "current" },
+          "id-70": { "kind": "current" },
+          "id-71": { "kind": "current" },
+          "id-72": { "kind": "current" },
+          "id-73": { "kind": "current" },
+          "id-74": { "kind": "current" },
+          "id-75": { "kind": "current" },
+          "id-76": { "kind": "current" },
+          "id-77": { "kind": "current" },
+          "id-78": { "kind": "current" },
+          "id-79": { "kind": "current" },
+          "id-80": { "kind": "current" },
+          "id-81": { "kind": "current" },
+          "id-82": { "kind": "current" },
+          "id-83": { "kind": "current" },
+          "id-84": { "kind": "current" },
+          "id-85": { "kind": "current" },
+          "id-86": { "kind": "current" },
+          "id-87": { "kind": "current" },
+          "id-88": { "kind": "current" },
+          "id-89": { "kind": "current" },
+          "id-90": { "kind": "current" },
+          "id-91": { "kind": "current" },
+          "id-92": { "kind": "current" },
+          "id-93": { "kind": "current" },
+          "id-94": { "kind": "current" },
+          "id-95": { "kind": "current" },
+          "id-96": { "kind": "current" },
+          "id-97": { "kind": "current" },
+          "id-98": { "kind": "current" },
+          "id-99": { "kind": "current" },
+          "id-100": { "kind": "current" }
+        }
+      }
+    }
   }
 ]

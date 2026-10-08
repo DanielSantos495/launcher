@@ -6,6 +6,9 @@ export const MAX_HOST_REQUEST_BYTES = 1024 * 1024
 export const MAX_HOST_RESPONSE_BYTES = 1_000_000
 // Datos compartidos serializados: deja espacio en sync.get para el sobre y los vínculos.
 export const MAX_SHARED_DATA_BYTES = 512 * 1024
+// Vínculos compartidos serializados (además, como mucho 100). Con los datos y el sobre, sync.get queda en unos
+// 655 500 bytes, por debajo de MAX_HOST_RESPONSE_BYTES.
+export const MAX_SHARED_BINDINGS_BYTES = 128 * 1024
 // Imágenes subidas: viajan aparte (icons.*), una por mensaje.
 export const MAX_ICON_BYTES = 32 * 1024
 export const PAIR_CODE_TTL_SECONDS = 120

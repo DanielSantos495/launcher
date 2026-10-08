@@ -36,6 +36,8 @@ export type Op = v.InferOutput<typeof OpSchema>
 
 export interface OpError {
   readonly code: 'not_found' | 'in_use' | 'invalid'
+  // Índice de la operación. Con not_found e in_use es la que falló. Con invalid es siempre la última del lote: el
+  // resultado se valida entero al final y no se sabe qué operación lo dejó inválido (la UI no debe señalar una).
   readonly op: number
   readonly issues?: string[]
 }

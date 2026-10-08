@@ -1,3 +1,4 @@
+import { BindingsSchema, createEmptyData, isUrlInGrammar, LIMITS, loadData, normalizeUrl } from '@account-launcher/core'
 import * as v from 'valibot'
 import { describe, expect, it } from 'vitest'
 import responsesFixture from '../fixtures/host-responses.json'
@@ -6,6 +7,7 @@ import {
   Base64Schema,
   HOST_COMMANDS,
   HOST_ERROR_CODES,
+  HOST_RESULT_SCHEMAS,
   HostRequestSchema,
   hostRequest,
   isValidContainerName,
@@ -45,9 +47,10 @@ describe('contrato de peticiones (host-requests.json)', () => {
 describe('contrato de respuestas (host-responses.json)', () => {
   it.each(responses.map((c) => [c.name, c] as const))('%s', (_name, c) => {
     const r = parseHostResponse(c.cmd, c.response)
-    const expected = (c.response as { ok: boolean }).ok
-    if (expected) expect(r.ok).toBe(true)
-    else expect(!r.ok && r.error.code !== 'bad_response').toBe(true)
+    const response = c.response as { ok: boolean; error?: unknown }
+    if (response.ok) expect(r.ok).toBe(true)
+    // Un error se devuelve tal cual: el mismo código (y la revisión de conflict) que el fixture.
+    else expect(r).toEqual({ ok: false, error: response.error })
   })
 
   it('cubre cada comando con al menos una respuesta correcta', () => {
@@ -130,5 +133,91 @@ describe('isValidContainerName (Review Focus 3)', () => {
 describe('hostRequest', () => {
   it('construye el sobre con la versión', () => {
     expect(hostRequest('ping', {})).toEqual({ v: 1, cmd: 'ping', args: {} })
+  })
+})
+
+describe('sync.get: el resultado solo se comprueba en su estructura (B5)', () => {
+  const syncGet = (result: unknown) => parseHostResponse('sync.get', { ok: true, result })
+
+  it('unos datos de otra versión no son bad_response, y loadData los rechaza con unsupported_version', () => {
+    const r = syncGet({ revision: 7, data: { ...createEmptyData(), schemaVersion: 2, campoNuevo: [1] }, bindings: {} })
+    expect(r.ok).toBe(true)
+    expect(r.ok && loadData(r.value.data)).toEqual({ ok: false, error: { code: 'unsupported_version' } })
+  })
+
+  it('unos datos válidos pasan por loadData y unos vínculos válidos por BindingsSchema', () => {
+    const data = { ...createEmptyData(), revision: 3 }
+    const bindings = { 'id-home': { kind: 'chromium-profile', profileDirectory: 'Profile 1' } }
+    const r = syncGet({ revision: 7, data, bindings })
+    expect(r.ok && loadData(r.value.data)).toEqual({ ok: true, value: data })
+    expect(r.ok && v.safeParse(BindingsSchema, r.value.bindings).success).toBe(true)
+  })
+
+  it('no valida cada vínculo: eso lo hace BindingsSchema después', () => {
+    const r = syncGet({ revision: 0, data: null, bindings: { 'id-x': { kind: 'otro' } } })
+    expect(r.ok).toBe(true)
+    expect(r.ok && v.safeParse(BindingsSchema, r.value.bindings).success).toBe(false)
+  })
+
+  it.each([
+    ['data como array', { revision: 0, data: [], bindings: {} }],
+    ['data sin schemaVersion', { revision: 0, data: {}, bindings: {} }],
+    ['schemaVersion 0', { revision: 0, data: { schemaVersion: 0 }, bindings: {} }],
+    ['schemaVersion no entera', { revision: 0, data: { schemaVersion: 1.5 }, bindings: {} }],
+    ['schemaVersion como texto', { revision: 0, data: { schemaVersion: '1' }, bindings: {} }],
+    ['bindings como array', { revision: 0, data: null, bindings: [] }],
+    ['bindings null', { revision: 0, data: null, bindings: null }],
+    [
+      'más de 100 vínculos',
+      {
+        revision: 0,
+        data: null,
+        bindings: Object.fromEntries(
+          Array.from({ length: LIMITS.identities + 1 }, (_, n) => [`id-${String(n)}`, { kind: 'current' }]),
+        ),
+      },
+    ],
+    ['campo de más', { revision: 0, data: null, bindings: {}, extra: 1 }],
+  ])('%s es bad_response', (_name, result) => {
+    expect(syncGet(result)).toEqual({ ok: false, error: { code: 'bad_response' } })
+  })
+})
+
+describe('listas de las respuestas: guarda de tamaño', () => {
+  // Con la guarda, un elemento de más da un único error (el de la guarda) y no se valida ningún elemento.
+  it('listProfiles con 501 perfiles {}', () => {
+    const r = v.safeParse(HOST_RESULT_SCHEMAS.listProfiles, { profiles: new Array<object>(501).fill({}) })
+    expect(r.issues?.map((issue) => issue.type)).toEqual(['check'])
+  })
+
+  it('pair.list con 17 instalaciones {}', () => {
+    const r = v.safeParse(HOST_RESULT_SCHEMAS['pair.list'], {
+      maxPairedProfiles: 2,
+      installations: new Array<object>(17).fill({}),
+    })
+    expect(r.issues?.map((issue) => issue.type)).toEqual(['check'])
+  })
+})
+
+describe('URLs de los fixtures y la gramática G (B2)', () => {
+  const urls = requests.flatMap((c) => {
+    const url = (c.request as { args?: { url?: unknown } } | null)?.args?.url
+    return typeof url === 'string' ? [{ c, url }] : []
+  })
+
+  it('cada URL de un caso válido está en G y es canónica; cada URL de un caso bad_url está fuera de G', () => {
+    const wrong = urls.filter(({ c, url }) =>
+      c.valid ? !isUrlInGrammar(url) || new URL(url).href !== url : c.error === 'bad_url' && isUrlInGrammar(url),
+    )
+    expect(wrong.map(({ c }) => c.name)).toEqual([])
+  })
+
+  it('lo que acepta normalizeUrl está en G, y lo que está en G es canónico', () => {
+    const wrong = urls.filter(({ url }) => {
+      const r = normalizeUrl(url, { allowHttp: true })
+      return (r.ok && !isUrlInGrammar(r.value)) || (isUrlInGrammar(url) && new URL(url).href !== url)
+    })
+    expect(wrong.map(({ c }) => c.name)).toEqual([])
+    expect(urls.length).toBeGreaterThan(40)
   })
 })

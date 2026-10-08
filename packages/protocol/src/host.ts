@@ -1,10 +1,14 @@
 import {
   BindingsSchema,
+  boundedArray,
   err,
   hasControlChars,
+  IconKeySchema,
   IdSchema,
+  isUrlInGrammar,
   LauncherDataSchema,
-  normalizeUrl,
+  LIMITS,
+  maxKeys,
   notArray,
   ok,
   ProfileDirectorySchema,
@@ -37,25 +41,20 @@ export function isValidContainerName(name: string): boolean {
 }
 export const ContainerNameSchema = v.pipe(v.string(), v.check(isValidContainerName, 'nombre no válido'))
 
-// El host solo acepta URLs ya canónicas (las produce core.normalizeUrl): una sola forma por URL (T2).
-// http se admite porque el core solo lo deja pasar si el usuario activó allowHttp.
-export const HostUrlSchema = v.pipe(
-  v.string(),
-  v.check((s) => {
-    const r = normalizeUrl(s, { allowHttp: true })
-    return r.ok && r.value === s
-  }, 'URL no válida'),
-)
+// El host acepta exactamente las URLs de la gramática G de core (isUrlInGrammar), que es lo que comprueba Go: una sola
+// forma por URL (T2). core.normalizeUrl siempre produce URLs de G. http se admite porque el core solo lo deja pasar
+// si el usuario activó allowHttp.
+export const HostUrlSchema = v.pipe(v.string(), v.check(isUrlInGrammar, 'URL no válida'))
 
-export const IconKeySchema = v.pipe(v.string(), v.regex(/^icon:[A-Za-z0-9_-]{1,64}$/))
 export const IconMimeSchema = v.picklist(['image/png', 'image/jpeg', 'image/webp'])
 // Tamaño decodificado de un base64 con relleno: longitud / 4 * 3 menos los caracteres "=" finales (0, 1 o 2).
 function decodedSize(base64: string): number {
   const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0
   return (base64.length / 4) * 3 - padding
 }
-// El tope de caracteres (43692) solo acota el trabajo de la expresión regular: admite hasta 32769 bytes (43692
-// caracteres sin relleno), así que el límite real (MAX_ICON_BYTES) se comprueba sobre el tamaño decodificado.
+// El tope de caracteres (43692) admite hasta 32769 bytes (43692 caracteres sin relleno), así que el límite real
+// (MAX_ICON_BYTES) se comprueba sobre el tamaño decodificado. No acota el trabajo de la expresión regular: Valibot
+// sigue ejecutando las acciones del pipe aunque falle maxLength; no hace falta, porque la regex es lineal.
 export const Base64Schema = v.pipe(
   v.string(),
   v.minLength(4),
@@ -122,6 +121,23 @@ const InstallationSchema = v.strictObject({
   self: v.boolean(),
 })
 
+// sync.get devuelve los datos compartidos tal como los guardó el host, que solo comprobó su estructura (ADR-004): aquí
+// se comprueba esa misma estructura y nada más. Unos datos de otra versión de la extensión no son una respuesta rota
+// del host; el SW los pasa por loadData (migra y valida, unsupported_version si son más nuevos) y los vínculos por
+// BindingsSchema, y muestra un error distinto. looseObject y record devuelven una copia sin las claves __proto__,
+// constructor y prototype (Valibot las omite): ninguna es un campo ni un id válido.
+const SharedDataShapeSchema = v.pipe(
+  v.unknown(),
+  notArray,
+  v.looseObject({ schemaVersion: v.pipe(v.number(), v.integer(), v.minValue(1)) }),
+)
+const SharedBindingsShapeSchema = v.pipe(
+  v.unknown(),
+  notArray,
+  maxKeys(LIMITS.identities),
+  v.record(v.string(), v.unknown()),
+)
+
 export const HOST_RESULT_SCHEMAS = {
   ping: v.strictObject({
     hostVersion: v.pipe(v.string(), v.maxLength(32)),
@@ -130,7 +146,8 @@ export const HOST_RESULT_SCHEMAS = {
     browserVersion: v.optional(v.pipe(v.string(), v.maxLength(32))),
     features: v.strictObject({ temporaryContainer: v.boolean() }),
   }),
-  listProfiles: v.strictObject({ profiles: v.pipe(v.array(ProfileInfoSchema), v.maxLength(500)) }),
+  // Las listas llevan la guarda de tamaño de core: un host roto no puede hacer validar miles de elementos.
+  listProfiles: v.strictObject({ profiles: boundedArray(ProfileInfoSchema, 500) }),
   open: Empty,
   openTemporary: Empty,
   createProfile: v.strictObject({ directory: ProfileDirectorySchema }),
@@ -139,15 +156,15 @@ export const HOST_RESULT_SCHEMAS = {
   'pair.declare': Empty,
   'pair.list': v.strictObject({
     maxPairedProfiles: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(16)),
-    installations: v.pipe(v.array(InstallationSchema), v.maxLength(16)),
+    installations: boundedArray(InstallationSchema, 16),
   }),
   'pair.remove': Empty,
   'pair.verify': v.strictObject({ expiresAt: TimestampSchema }),
   'pair.prove': v.strictObject({ verifiedAt: TimestampSchema }),
   'sync.get': v.strictObject({
     revision: RevisionSchema,
-    data: v.nullable(LauncherDataSchema),
-    bindings: BindingsSchema,
+    data: v.nullable(SharedDataShapeSchema),
+    bindings: SharedBindingsShapeSchema,
   }),
   'sync.put': v.strictObject({ revision: RevisionSchema }),
   'icons.get': v.strictObject({ key: IconKeySchema, mime: IconMimeSchema, base64: Base64Schema }),

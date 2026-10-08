@@ -1,10 +1,13 @@
 import * as v from 'valibot'
+import { isRecord } from './guards'
 import { MIGRATIONS, migrate, type Migration } from './migrations'
 import { err, ok, type Result } from './result'
 import {
+  boundedArray,
   IdSchema,
   LauncherDataSchema,
   LIMITS,
+  MAX_ISSUES,
   parseLauncherData,
   SCHEMA_VERSION,
   TimestampSchema,
@@ -25,18 +28,26 @@ export const BindingHintSchema = v.strictObject({
   name: v.optional(v.pipe(v.string(), v.maxLength(256))),
 })
 
+// Como mucho una pista por identidad, contadas antes de validar cada una (guarda de tamaño, T5). Lo usan el archivo
+// exportado y el mensaje data.import de protocol.
+export const BindingHintsSchema = boundedArray(BindingHintSchema, LIMITS.identities)
+
 export const ExportFileSchema = v.strictObject({
   app: v.literal(APP_ID),
   schemaVersion: v.literal(SCHEMA_VERSION),
   exportedAt: TimestampSchema,
   data: LauncherDataSchema,
-  bindingHints: v.pipe(v.array(BindingHintSchema), v.maxLength(LIMITS.identities)),
+  bindingHints: BindingHintsSchema,
 })
 
 export type BindingHint = v.InferOutput<typeof BindingHintSchema>
 export type ExportFile = v.InferOutput<typeof ExportFileSchema>
 
 // Los vínculos son propios de cada navegador: se exportan como pistas por nombre visible (§5.2).
+// Un nombre por defecto de Brave ("Persona 1") no identifica a nadie: en el otro navegador puede ser el perfil de otra
+// persona (T11). Por eso la pista lleva el nombre del perfil solo si el usuario lo eligió (isUsingDefaultName: false);
+// si no, o si el perfil ya no existe, lleva el nombre que el usuario pidió al crearlo (desiredName), y si tampoco hay,
+// ningún nombre.
 export function exportData(
   data: LauncherData,
   bindings: Bindings,
@@ -52,7 +63,8 @@ export function exportData(
       bindingHints.push({ identityId, kind: 'current' })
       continue
     }
-    const name = profiles.find((p) => p.directory === binding.profileDirectory)?.name
+    const profile = profiles.find((p) => p.directory === binding.profileDirectory)
+    const name = profile !== undefined && !profile.isUsingDefaultName ? profile.name : binding.desiredName
     bindingHints.push(
       name === undefined ? { identityId, kind: binding.kind } : { identityId, kind: binding.kind, name },
     )
@@ -69,10 +81,6 @@ export type ImportErrorCode = 'too_large' | 'invalid_json' | 'not_launcher_file'
 export interface ImportError {
   readonly code: ImportErrorCode
   readonly issues?: string[]
-}
-
-function isRecord(x: unknown): x is Record<string, unknown> {
-  return typeof x === 'object' && x !== null && !Array.isArray(x)
 }
 
 // Las pistas deben apuntar a identidades del propio archivo y no repetirse. Los mensajes llevan solo el índice.
@@ -118,8 +126,22 @@ export function parseImport(
   if (!parsed.success) return err({ code: 'invalid', issues: formatIssues(parsed.issues) })
   const valid = validateData(parsed.output.data)
   const issues = [...(valid.ok ? [] : valid.error), ...hintIssues(parsed.output)]
-  if (issues.length > 0) return err({ code: 'invalid', issues })
+  if (issues.length > 0) return err({ code: 'invalid', issues: issues.slice(0, MAX_ISSUES) })
   return ok(parsed.output)
+}
+
+// loadData carga unos datos guardados fuera de la extensión: migra y después valida con el esquema completo y las
+// reglas cruzadas. El SW la usa con el `data` de sync.get (el host solo comprueba su estructura, ADR-004) y la usará
+// con lo que guarda en storage.local. Una versión más nueva que la de esta extensión es unsupported_version.
+export function loadData(
+  raw: unknown,
+  table: Readonly<Record<number, Migration>> = MIGRATIONS,
+  current: number = SCHEMA_VERSION,
+): Result<LauncherData, ImportError> {
+  const migrated = migrate(raw, current, table)
+  if (!migrated.ok) return err({ code: migrated.error })
+  const parsed = parseLauncherData(migrated.value)
+  return parsed.ok ? parsed : err({ code: 'invalid', issues: parsed.error })
 }
 
 export interface ImportPlan {
@@ -210,6 +232,7 @@ export function planImport(
 
 // rebindFromHints empareja cada pista con un perfil existente por nombre exacto. Nunca crea perfiles (T5).
 // Si no hay exactamente un perfil con ese nombre, la identidad queda sin resolver y conserva su vínculo anterior.
+// Los perfiles con el nombre por defecto de Brave no son candidatos: "Persona 1" no dice de quién es el perfil (T11).
 export function rebindFromHints(
   hints: readonly BindingHint[],
   profiles: readonly ProfileInfo[],
@@ -217,12 +240,13 @@ export function rebindFromHints(
 ): { bindings: Record<string, Binding>; unresolved: string[] } {
   const bindings: Record<string, Binding> = { ...existing }
   const unresolved: string[] = []
+  const named = profiles.filter((p) => !p.isUsingDefaultName)
   for (const hint of hints) {
     if (hint.kind === 'current') {
       bindings[hint.identityId] = { kind: 'current' }
       continue
     }
-    const matches = profiles.filter((p) => p.name === hint.name)
+    const matches = named.filter((p) => p.name === hint.name)
     const match = matches.length === 1 ? matches[0] : undefined
     if (match === undefined) {
       unresolved.push(hint.identityId)

@@ -1,24 +1,19 @@
 import {
+  BindingHintsSchema,
   BindingSchema,
   IdSchema,
-  LIMITS,
+  LabelSchema,
+  LauncherDataSchema,
   MAX_URL_LENGTH,
   OpSchema,
   ProfileDirectorySchema,
   RevisionSchema,
-  hasControlChars,
   type Binding,
   type LauncherData,
   type ProfileInfo,
 } from '@account-launcher/core'
 import * as v from 'valibot'
 import { ContainerNameSchema, PairCodeSchema, type HostErrorCode, type HostResult } from './host'
-
-const NameSchema = v.pipe(
-  v.string(),
-  v.maxLength(LIMITS.label),
-  v.check((s) => s.trim() !== '' && !hasControlChars(s), 'nombre no válido'),
-)
 
 // Mensajes del dashboard al service worker. El SW los valida y comprueba sender.id (T1).
 export const UiRequestSchema = v.variant('type', [
@@ -35,13 +30,23 @@ export const UiRequestSchema = v.variant('type', [
   }),
   v.strictObject({ type: v.literal('capabilities.get') }),
   v.strictObject({ type: v.literal('profiles.list') }),
-  v.strictObject({ type: v.literal('profiles.create'), identityId: IdSchema, name: NameSchema }),
+  // name acaba en el desiredName del vínculo: es el mismo esquema de etiqueta de core.
+  v.strictObject({ type: v.literal('profiles.create'), identityId: IdSchema, name: LabelSchema }),
   v.strictObject({ type: v.literal('host.ping') }),
   v.strictObject({ type: v.literal('data.get') }),
   v.strictObject({
     type: v.literal('data.mutate'),
     revision: RevisionSchema,
     ops: v.pipe(v.array(OpSchema), v.minLength(1), v.maxLength(100)),
+  }),
+  // Importación de una vez (§5.4): el dashboard ya pasó el archivo por parseImport. El SW valida y combina con
+  // planImport, guarda la copia data.backup, aplica todo de una vez y revincula con rebindFromHints.
+  v.strictObject({
+    type: v.literal('data.import'),
+    revision: RevisionSchema,
+    mode: v.picklist(['merge', 'replace']),
+    data: LauncherDataSchema,
+    bindingHints: v.optional(BindingHintsSchema),
   }),
   v.strictObject({ type: v.literal('bindings.get') }),
   v.strictObject({ type: v.literal('bindings.set'), identityId: IdSchema, binding: v.nullable(BindingSchema) }),
@@ -105,6 +110,15 @@ export interface UiResults {
   'host.ping': HostResult<'ping'>
   'data.get': { readonly data: LauncherData; readonly source: 'local' | 'shared' }
   'data.mutate': { readonly revision: number }
+  // Recuentos de planImport e identidades sin revincular (la UI pide resolverlas).
+  'data.import': {
+    readonly revision: number
+    readonly added: number
+    readonly updated: number
+    readonly unchanged: number
+    readonly removed: number
+    readonly unresolved: readonly string[]
+  }
   'bindings.get': { readonly bindings: Readonly<Record<string, Binding>> }
   'bindings.set': Empty
   'pair.start': { readonly code: string; readonly expiresAt: string }

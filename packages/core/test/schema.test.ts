@@ -5,7 +5,9 @@ import {
   createEmptyData,
   IdSchema,
   isSafeDirectoryName,
+  LabelSchema,
   LIMITS,
+  MAX_ISSUES,
   parseLauncherData,
   ProfileDirectorySchema,
   ProfileInfoSchema,
@@ -267,5 +269,60 @@ describe('ProfileInfoSchema', () => {
     ['falta isUsingDefaultName', { directory: 'Default', name: 'Persona 1' }],
   ])('rechaza %s', (_name, input) => {
     expect(v.safeParse(ProfileInfoSchema, input).success).toBe(false)
+  })
+})
+
+describe('guardas de tamaño (T5)', () => {
+  // Más de un millón de elementos: sin la guarda, Valibot valida y acumula errores de cada uno (segundos y GB).
+  const HOSTILE = 1_600_000
+
+  it.each(['identities', 'groups', 'accounts', 'customServices'] as const)(
+    '%s: un array enorme se rechaza sin validar sus elementos',
+    (key) => {
+      const raw = { ...createEmptyData(), [key]: new Array<object>(HOSTILE).fill({}) }
+      const start = performance.now()
+      const r = parseLauncherData(raw)
+      expect(performance.now() - start).toBeLessThan(1000)
+      expect(r).toEqual({ ok: false, error: [`${key}: check`] })
+    },
+  )
+
+  it.each(['identities', 'groups', 'accounts', 'customServices'] as const)(
+    '%s: con un elemento de más, el único error es el de la guarda (los elementos no se validan)',
+    (key) => {
+      const raw = { ...createEmptyData(), [key]: new Array<object>(LIMITS[key] + 1).fill({}) }
+      expect(parseLauncherData(raw)).toEqual({ ok: false, error: [`${key}: check`] })
+    },
+  )
+
+  it('BindingsSchema cuenta las claves antes de validar cada vínculo', () => {
+    const many = Object.fromEntries(Array.from({ length: 200_000 }, (_, i) => [`id-${String(i)}`, {}]))
+    const r = v.safeParse(BindingsSchema, many)
+    expect(r.issues?.map((issue) => issue.type)).toEqual(['check'])
+  })
+
+  it('MAX_ISSUES es 50 y formatIssues no devuelve más mensajes', () => {
+    expect(MAX_ISSUES).toBe(50)
+    // 2000 cuentas vacías caben en el límite y dan miles de errores de esquema.
+    const r = parseLauncherData({ ...createEmptyData(), accounts: new Array<object>(LIMITS.accounts).fill({}) })
+    expect(r.ok ? [] : r.error).toHaveLength(MAX_ISSUES)
+  })
+
+  it('validateData tampoco devuelve más de MAX_ISSUES mensajes', () => {
+    const accounts = Array.from({ length: LIMITS.accounts }, (_, i) =>
+      account({ id: `acc-${String(i)}`, identityId: 'nadie' }),
+    )
+    const r = validateData(data({ accounts }))
+    expect(r.ok ? [] : r.error).toHaveLength(MAX_ISSUES)
+  })
+})
+
+describe('LabelSchema', () => {
+  it('es la regla de las etiquetas: no vacía, sin controles y como mucho LIMITS.label', () => {
+    expect(v.safeParse(LabelSchema, 'Trabajo').success).toBe(true)
+    expect(v.safeParse(LabelSchema, 'x'.repeat(LIMITS.label)).success).toBe(true)
+    expect(v.safeParse(LabelSchema, 'x'.repeat(LIMITS.label + 1)).success).toBe(false)
+    expect(v.safeParse(LabelSchema, '   ').success).toBe(false)
+    expect(v.safeParse(LabelSchema, 'a\u0007b').success).toBe(false)
   })
 })

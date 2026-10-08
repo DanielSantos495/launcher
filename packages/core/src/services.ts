@@ -59,7 +59,8 @@ export interface ServiceInfo {
 
 export function serviceInfo(data: LauncherData, serviceId: string): ServiceInfo | undefined {
   const known = CATALOG.find((s) => s.id === serviceId)
-  // Copia solo los campos públicos: defaultUrl y authuserHost no salen del catálogo.
+  // Copia solo lo que necesita la UI: defaultUrl y authuserHost son para buildAccountUrl. No es un secreto (CATALOG
+  // se exporta entero), solo una copia que la UI puede guardar sin arrastrar esos campos.
   if (known) return { id: known.id, name: known.name, multiAccount: known.multiAccount, icon: known.icon }
   const custom = data.customServices.find((s) => `custom:${s.id}` === serviceId)
   return custom ? { id: serviceId, name: custom.name, multiAccount: custom.multiAccount } : undefined

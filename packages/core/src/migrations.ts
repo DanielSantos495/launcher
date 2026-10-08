@@ -1,13 +1,10 @@
+import { isRecord } from './guards'
 import { err, ok, type Result } from './result'
 import { SCHEMA_VERSION } from './schema'
 
 // Cada migración convierte la versión n en la n + 1 (§5.4). Hoy solo existe la versión 1.
 export type Migration = (input: Record<string, unknown>) => Record<string, unknown>
 export const MIGRATIONS: Readonly<Record<number, Migration>> = {}
-
-function isRecord(x: unknown): x is Record<string, unknown> {
-  return typeof x === 'object' && x !== null && !Array.isArray(x)
-}
 
 export function migrate(
   input: unknown,

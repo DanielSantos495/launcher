@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   exportData,
+  loadData,
   MAX_IMPORT_BYTES,
   parseImport,
   planImport,
@@ -8,7 +9,7 @@ import {
   serializeExport,
   type ImportPlan,
 } from '../src/io'
-import { createEmptyData, LIMITS, type Bindings, type ProfileInfo } from '../src/schema'
+import { createEmptyData, LIMITS, MAX_ISSUES, type Bindings, type ProfileInfo } from '../src/schema'
 import { account, data, group, identity, T0, T1 } from './fixtures'
 
 const profiles: ProfileInfo[] = [
@@ -273,7 +274,8 @@ describe('planImport (conteos y rutas)', () => {
     const mine = data({ identities: batch('a') })
     const theirs = data({ identities: batch('b') })
     const merged = planImport(mine, theirs, 'merge')
-    expect(merged.ok ? undefined : merged.error).toEqual({ code: 'invalid', issues: ['identities: max_length'] })
+    // La guarda de tamaño (boundedArray) va antes de validar los elementos: el mensaje es el de su check.
+    expect(merged.ok ? undefined : merged.error).toEqual({ code: 'invalid', issues: ['identities: check'] })
     expect(planImport(mine, theirs, 'replace').ok).toBe(true)
   })
 })
@@ -332,5 +334,144 @@ describe('ida y vuelta (criterio de F1)', () => {
     const plan = planImport(createEmptyData(), parsed.value.data, 'replace')
     expect(plan.ok && { ...plan.value.data, revision: full.revision }).toEqual(full)
     expect(rebindFromHints(parsed.value.bindingHints, profiles).bindings).toEqual(bindings)
+  })
+})
+
+describe('importación hostil por debajo de 5 MB (T5)', () => {
+  const settings = createEmptyData().settings
+
+  it('un archivo de ~4,9 MB con cuentas {} es invalid en menos de 1 s y con ≤ MAX_ISSUES mensajes', () => {
+    const envelope = JSON.stringify({
+      app: 'account-launcher',
+      schemaVersion: 1,
+      exportedAt: T1,
+      data: { ...createEmptyData(), accounts: ['CUENTAS'] },
+      bindingHints: [],
+    })
+    const file = envelope.replace('["CUENTAS"]', `[${'{},'.repeat(1_630_000)}{}]`)
+    // Solo ASCII: la longitud es el tamaño en bytes.
+    expect(file.length).toBeGreaterThan(4_800_000)
+    expect(file.length).toBeLessThanOrEqual(MAX_IMPORT_BYTES)
+    const start = performance.now()
+    const r = parseImport(file)
+    expect(performance.now() - start).toBeLessThan(1000)
+    expect(r.ok ? undefined : r.error).toEqual({ code: 'invalid', issues: ['data.accounts: check'] })
+    expect(r.ok ? [] : (r.error.issues ?? []).length).toBeLessThanOrEqual(MAX_ISSUES)
+  })
+
+  it.each([LIMITS.identities + 1, 1_000_000])('bindingHints: %i pistas {} se rechazan sin validar ninguna', (n) => {
+    const file = JSON.stringify({
+      app: 'account-launcher',
+      schemaVersion: 1,
+      exportedAt: T1,
+      data: { ...createEmptyData(), settings },
+      bindingHints: new Array<object>(n).fill({}),
+    })
+    const r = parseImport(file)
+    expect(r.ok ? undefined : r.error).toEqual({ code: 'invalid', issues: ['bindingHints: check'] })
+  })
+
+  it('parseImport no pasa de MAX_ISSUES aunque sume errores de datos y de pistas', () => {
+    const hints = Array.from({ length: LIMITS.identities }, (_, n) => ({
+      identityId: `id-x${String(n)}`,
+      kind: 'current',
+    }))
+    const file = JSON.stringify({ ...exportData(full, {}, profiles, now), bindingHints: hints })
+    const r = parseImport(file)
+    expect(r.ok ? undefined : r.error.code).toBe('invalid')
+    expect(r.ok ? [] : r.error.issues).toHaveLength(MAX_ISSUES)
+  })
+})
+
+describe('loadData (datos leídos de fuera: sync.get, storage.local)', () => {
+  it('acepta datos válidos', () => {
+    expect(loadData(full)).toEqual({ ok: true, value: full })
+  })
+
+  it('rechaza con unsupported_version los datos de una versión más nueva, aunque traigan campos desconocidos', () => {
+    expect(loadData({ ...full, schemaVersion: 2, campoNuevo: true })).toEqual({
+      ok: false,
+      error: { code: 'unsupported_version' },
+    })
+  })
+
+  it.each([null, [], {}, { schemaVersion: 0 }, { schemaVersion: '1' }])('rechaza %j con invalid', (raw) => {
+    expect(loadData(raw)).toEqual({ ok: false, error: { code: 'invalid' } })
+  })
+
+  it('rechaza con invalid y mensajes lo que no cumple el esquema o las reglas cruzadas', () => {
+    expect(loadData({ ...full, extra: 1 })).toEqual({
+      ok: false,
+      error: { code: 'invalid', issues: ['extra: strict_object'] },
+    })
+    const orphan = { ...full, accounts: [account({ identityId: 'id-nadie' })] }
+    expect(loadData(orphan)).toEqual({
+      ok: false,
+      error: { code: 'invalid', issues: ['accounts.acc-github: identidad desconocida'] },
+    })
+  })
+
+  it('migra antes de validar', () => {
+    const received: Record<string, unknown>[] = []
+    const table = {
+      1: (x: Record<string, unknown>) => {
+        received.push(x)
+        return x
+      },
+    }
+    // El esquema sigue en la versión 1: tras migrar a la 2 falla, lo que demuestra que se validó lo migrado.
+    expect(loadData(full, table, 2)).toEqual({
+      ok: false,
+      error: { code: 'invalid', issues: ['schemaVersion: literal'] },
+    })
+    expect(received).toEqual([full])
+  })
+})
+
+describe('nombres por defecto de Brave (T11)', () => {
+  const work = (desiredName?: string): Bindings => ({
+    'id-work': {
+      kind: 'chromium-profile',
+      profileDirectory: 'Launcher-work0001',
+      ...(desiredName === undefined ? {} : { desiredName }),
+    },
+  })
+  const withDefault: ProfileInfo[] = [{ directory: 'Launcher-work0001', name: 'Persona 1', isUsingDefaultName: true }]
+  const hintsOf = (b: Bindings, p: readonly ProfileInfo[]) => exportData(full, b, p, now).bindingHints
+
+  it('exportData: con el nombre por defecto exporta el desiredName del vínculo', () => {
+    expect(hintsOf(work('Trabajo'), withDefault)).toEqual([
+      { identityId: 'id-work', kind: 'chromium-profile', name: 'Trabajo' },
+    ])
+  })
+
+  it('exportData: con el nombre por defecto y sin desiredName no exporta nombre', () => {
+    expect(hintsOf(work(), withDefault)).toEqual([{ identityId: 'id-work', kind: 'chromium-profile' }])
+  })
+
+  it('exportData: con un nombre elegido por el usuario exporta ese nombre, no el desiredName', () => {
+    expect(hintsOf(work('Pedido'), profiles)).toEqual([
+      { identityId: 'id-work', kind: 'chromium-profile', name: 'Trabajo' },
+    ])
+  })
+
+  it('exportData: si el perfil ya no existe exporta el desiredName', () => {
+    expect(hintsOf(work('Trabajo'), [])).toEqual([{ identityId: 'id-work', kind: 'chromium-profile', name: 'Trabajo' }])
+  })
+
+  it('rebindFromHints ignora los perfiles que usan el nombre por defecto', () => {
+    const hints = [
+      { identityId: 'id-work', kind: 'chromium-profile' as const, name: 'Persona 1' },
+      { identityId: 'id-home', kind: 'chromium-profile' as const, name: 'Casa' },
+    ]
+    const target: ProfileInfo[] = [
+      { directory: 'Default', name: 'Persona 1', isUsingDefaultName: true },
+      { directory: 'Profile 2', name: 'Casa', isUsingDefaultName: true },
+      { directory: 'Profile 3', name: 'Casa', isUsingDefaultName: false },
+    ]
+    expect(rebindFromHints(hints, target)).toEqual({
+      bindings: { 'id-home': { kind: 'chromium-profile', profileDirectory: 'Profile 3' } },
+      unresolved: ['id-work'],
+    })
   })
 })

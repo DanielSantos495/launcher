@@ -5,7 +5,7 @@ import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
 export default defineConfig([
-  globalIgnores(['**/node_modules/', '**/coverage/', '**/.output/', '**/.wxt/', 'spike/']),
+  globalIgnores(['**/node_modules/', '**/coverage/', '**/.output/', '**/.wxt/', 'spike/', '.worktrees/']),
   js.configs.recommended,
   {
     files: ['packages/**/*.ts', 'apps/**/*.{ts,tsx}'],
