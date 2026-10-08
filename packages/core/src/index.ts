@@ -1,3 +1,5 @@
 export * from './result'
 export * from './text'
 export * from './url'
+export * from './schema'
+export * from './template'
