@@ -125,6 +125,14 @@ describe('parseImport', () => {
     expect(r.ok ? undefined : r.error).toEqual({ code: 'invalid', issues: ['bindingHints.2: identidad repetida'] })
   })
 
+  it('rechaza una pista con el nombre mal formado y acepta el mismo nombre con un emoji', () => {
+    const withName = (name: string): string =>
+      withEnvelope((f) => (f.bindingHints[0] = { identityId: 'id-work', kind: 'chromium-profile', name }))
+    const bad = parseImport(withName('P\ud800'))
+    expect(bad.ok ? undefined : bad.error).toEqual({ code: 'invalid', issues: ['bindingHints.0.name: check'] })
+    expect(parseImport(withName('Perfil 😀')).ok).toBe(true)
+  })
+
   it.each([
     ['sin versión en el sobre', (f: Envelope) => delete f.schemaVersion],
     ['versión 0', (f: Envelope) => (f.schemaVersion = 0)],

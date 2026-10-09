@@ -1,5 +1,5 @@
 import { err, ok, type Result } from './result'
-import { hasControlChars } from './text'
+import { hasControlChars, isWellFormed } from './text'
 
 export const MAX_URL_LENGTH = 2048
 
@@ -96,7 +96,8 @@ export function normalizeUrl(input: string, policy: UrlPolicy): Result<string, U
   const raw = input.trim()
   if (raw === '') return err('invalid')
   if (raw.length > MAX_URL_LENGTH) return err('length')
-  if (hasControlChars(raw)) return err('chars')
+  // WHATWG sustituiría un sustituto suelto por U+FFFD sin avisar: se rechaza antes de parsear.
+  if (hasControlChars(raw) || !isWellFormed(raw)) return err('chars')
   let url: URL
   try {
     url = new URL(raw)

@@ -52,6 +52,15 @@ describe('resolveTarget', () => {
     expect(resolveTarget(ctx, account())).toEqual({ kind: 'current' })
   })
 
+  it('ignora un vínculo heredado del prototipo: solo cuentan los propios', () => {
+    const inherited = Object.create({
+      'id-work': { kind: 'chromium-profile', profileDirectory: 'Profile 9' },
+    }) as Bindings
+    const ctx = { data: data({ identities: people, settings: multi }), bindings: inherited }
+    expect(resolveTarget(ctx, account())).toEqual({ kind: 'current' })
+    expect(resolveTarget(ctx, account(), 'id-work')).toEqual({ kind: 'current' })
+  })
+
   it('un vínculo "current" abre en el perfil actual', () => {
     const current: Bindings = { 'id-work': { kind: 'current' } }
     const ctx = { data: data({ identities: people, settings: multi }), bindings: current }

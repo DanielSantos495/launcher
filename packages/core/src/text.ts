@@ -7,3 +7,13 @@ export function hasControlChars(s: string, allowed = ''): boolean {
   }
   return false
 }
+
+// \p{Cs} con la bandera `u` solo casa un sustituto UTF-16 suelto: un par válido es un único punto de código (no es Cs).
+const LONE_SURROGATE = /\p{Cs}/u
+
+// Un sustituto suelto (U+D800 a U+DFFF sin su pareja) se escribe en JSON como "\ud800" y el host en Go rechaza ese
+// JSON (bad_request, ADR-004 punto 10): la sincronización fallaría para siempre. Todo texto del modelo debe estar bien
+// formado. No se usa String.prototype.isWellFormed porque la lib del proyecto es ES2023.
+export function isWellFormed(s: string): boolean {
+  return !LONE_SURROGATE.test(s)
+}

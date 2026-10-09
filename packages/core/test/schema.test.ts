@@ -1,8 +1,10 @@
 import * as v from 'valibot'
 import { describe, expect, it } from 'vitest'
 import {
+  BindingSchema,
   BindingsSchema,
   createEmptyData,
+  formatIssues,
   IdSchema,
   isSafeDirectoryName,
   LabelSchema,
@@ -14,7 +16,7 @@ import {
   validateData,
 } from '../src/schema'
 import { MAX_URL_LENGTH } from '../src/url'
-import { account, data, group, identity } from './fixtures'
+import { account, data, group, identity, T0 } from './fixtures'
 
 describe('parseLauncherData', () => {
   it('acepta datos vacíos y datos completos', () => {
@@ -193,10 +195,13 @@ describe('validateData', () => {
 })
 
 describe('carpetas de perfil', () => {
-  it.each([['.'], ['..'], ['-x'], ['a/b'], ['a\\b'], ['a\u0000b']])('isSafeDirectoryName rechaza %j', (name) => {
-    expect(isSafeDirectoryName(name)).toBe(false)
-    expect(v.safeParse(ProfileDirectorySchema, name).success).toBe(false)
-  })
+  it.each([['.'], ['..'], ['-x'], ['a/b'], ['a\\b'], ['a\u0000b'], ['a\ud800']])(
+    'isSafeDirectoryName rechaza %j',
+    (name) => {
+      expect(isSafeDirectoryName(name)).toBe(false)
+      expect(v.safeParse(ProfileDirectorySchema, name).success).toBe(false)
+    },
+  )
 
   it.each([[''], ['x'.repeat(256)]])('ProfileDirectorySchema rechaza vacío y demasiado largo (%#)', (name) => {
     expect(v.safeParse(ProfileDirectorySchema, name).success).toBe(false)
@@ -269,6 +274,148 @@ describe('ProfileInfoSchema', () => {
     ['falta isUsingDefaultName', { directory: 'Default', name: 'Persona 1' }],
   ])('rechaza %s', (_name, input) => {
     expect(v.safeParse(ProfileInfoSchema, input).success).toBe(false)
+  })
+})
+
+describe('textos bien formados (punto 30 de f1a-decisiones)', () => {
+  const service = {
+    id: 'slack',
+    name: 'Slack',
+    urlTemplate: 'https://{username}.slack.com/',
+    multiAccount: 'parallel' as const,
+    createdAt: T0,
+    updatedAt: T0,
+  }
+  // Datos válidos con todos los campos de texto presentes; cada fila cambia uno solo.
+  const withAccount = (over: Parameters<typeof account>[0]) =>
+    data({
+      groups: [group()],
+      customServices: [service],
+      accounts: [account({ groupId: 'grp-dev', username: 'ana', notes: 'nota', url: 'https://example.com/', ...over })],
+    })
+  const launcherIssues = (input: unknown): string[] => {
+    const r = parseLauncherData(input)
+    return r.ok ? [] : r.error
+  }
+  const schemaIssues = (schema: v.GenericSchema, input: unknown): string[] => {
+    const r = v.safeParse(schema, input)
+    return r.success ? [] : formatIssues(r.issues)
+  }
+
+  // [campo, issues esperados al rechazar, issues del campo con el valor dado, rechazado, aceptado]
+  // El email trae además 'email': v.email también rechaza el sustituto, pero el error de bien formado se da siempre.
+  const rows: [string, string[], (value: string) => string[], string, string][] = [
+    [
+      'identities[0].label',
+      ['identities.0.label: check'],
+      (value) => launcherIssues(data({ identities: [identity({ label: value })] })),
+      'Trabajo\ud800',
+      'Trabajo 😀',
+    ],
+    [
+      'identities[0].email',
+      ['identities.0.email: check', 'identities.0.email: email'],
+      (value) => launcherIssues(data({ identities: [identity({ email: value })] })),
+      'a\ud800@example.com',
+      'ana@example.com',
+    ],
+    [
+      'groups[0].name',
+      ['groups.0.name: check'],
+      (value) => launcherIssues(data({ groups: [group({ name: value })] })),
+      '\udc00',
+      'Grupo 😀',
+    ],
+    [
+      'accounts[0].label',
+      ['accounts.0.label: check'],
+      (value) => launcherIssues(withAccount({ label: value })),
+      'x\ud800',
+      'x 😀',
+    ],
+    [
+      'accounts[0].username',
+      ['accounts.0.username: check'],
+      (value) => launcherIssues(withAccount({ username: value })),
+      'u\ud800',
+      'u😀',
+    ],
+    [
+      'accounts[0].notes',
+      ['accounts.0.notes: check'],
+      (value) => launcherIssues(withAccount({ notes: value })),
+      'nota\ud800',
+      'nota 😀\n\tsegunda línea',
+    ],
+    [
+      'accounts[0].url',
+      ['accounts.0.url: check'],
+      (value) => launcherIssues(withAccount({ url: value })),
+      'https://example.com/\ud800',
+      'https://example.com/😀',
+    ],
+    [
+      'accounts[0].icon (emoji)',
+      ['accounts.0.icon.value: check'],
+      (value) => launcherIssues(withAccount({ icon: { type: 'emoji', value } })),
+      '\ud83d',
+      '😀',
+    ],
+    [
+      'customServices[0].name',
+      ['customServices.0.name: check'],
+      (value) => launcherIssues(data({ customServices: [{ ...service, name: value }] })),
+      'S\ud800',
+      'S 😀',
+    ],
+    [
+      'customServices[0].urlTemplate',
+      ['customServices.0.urlTemplate: check'],
+      (value) => launcherIssues(data({ customServices: [{ ...service, urlTemplate: value }] })),
+      'https://example.com/{username}\ud800',
+      'https://example.com/{username}',
+    ],
+    [
+      'BindingSchema desiredName',
+      ['desiredName: check'],
+      (value) =>
+        schemaIssues(BindingSchema, { kind: 'chromium-profile', profileDirectory: 'Default', desiredName: value }),
+      'P\ud800',
+      'Perfil 😀',
+    ],
+    [
+      'ProfileInfoSchema name',
+      ['name: check'],
+      (value) => schemaIssues(ProfileInfoSchema, { directory: 'Default', name: value, isUsingDefaultName: false }),
+      'Persona\ud800',
+      'Persona 😀',
+    ],
+    [
+      'ProfileDirectorySchema',
+      ['check'],
+      (value) => schemaIssues(ProfileDirectorySchema, value),
+      'Profile\ud800',
+      'Profile 1',
+    ],
+  ]
+
+  it.each(rows)(
+    '%s: rechaza un sustituto suelto y acepta texto bien formado',
+    (_field, expected, issues, bad, good) => {
+      const rejected = issues(bad)
+      expect(rejected).toEqual(expected)
+      // El mensaje lleva la ruta y el tipo de regla, nunca el texto recibido (ni crudo ni escapado).
+      const text = JSON.stringify(rejected)
+      expect(text).not.toContain(bad)
+      expect(text).not.toContain(JSON.stringify(bad).slice(1, -1))
+      expect(issues(good)).toEqual([])
+    },
+  )
+
+  it('un par sustituto válido (emoji) no se confunde con un sustituto suelto', () => {
+    expect(isSafeDirectoryName('Perfil 😀')).toBe(true)
+    expect(v.safeParse(LabelSchema, 'a😀b').success).toBe(true)
+    expect(v.safeParse(LabelSchema, '\ude00\ud83d').success).toBe(false)
   })
 })
 

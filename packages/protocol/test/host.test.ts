@@ -128,6 +128,12 @@ describe('isValidContainerName (Review Focus 3)', () => {
     expect(isValidContainerName('🎨'.repeat(64))).toBe(true)
     expect(isValidContainerName('🎨'.repeat(65))).toBe(false)
   })
+
+  it('rechaza los sustitutos UTF-16 sueltos y acepta los pares válidos', () => {
+    expect(isValidContainerName('\ud800')).toBe(false)
+    expect(isValidContainerName('a\udc00')).toBe(false)
+    expect(isValidContainerName('Banco 😀')).toBe(true)
+  })
 })
 
 describe('hostRequest', () => {

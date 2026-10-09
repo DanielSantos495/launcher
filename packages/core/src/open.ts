@@ -16,7 +16,9 @@ const CURRENT: OpenTarget = { kind: 'current' }
 export function resolveTarget(ctx: OpenContext, account: Account, asIdentityId?: string): OpenTarget {
   if (ctx.data.settings.mode === 'single') return CURRENT
   if (asIdentityId === undefined && account.contextOverride === 'current') return CURRENT
-  const binding = ctx.bindings[asIdentityId ?? account.identityId]
+  // Solo cuentan los vínculos propios: un id como "constructor" no debe leer el prototipo del objeto.
+  const id = asIdentityId ?? account.identityId
+  const binding = Object.hasOwn(ctx.bindings, id) ? ctx.bindings[id] : undefined
   return binding?.kind === 'chromium-profile'
     ? { kind: 'chromium-profile', profileDirectory: binding.profileDirectory }
     : CURRENT

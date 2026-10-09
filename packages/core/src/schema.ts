@@ -1,7 +1,7 @@
 import * as v from 'valibot'
 import { err, ok, type Result } from './result'
 import { isValidTemplate } from './template'
-import { hasControlChars } from './text'
+import { hasControlChars, isWellFormed } from './text'
 import { MAX_URL_LENGTH, normalizeUrl } from './url'
 
 export const SCHEMA_VERSION = 1
@@ -27,12 +27,13 @@ export const CATALOG_IDS = [
   'generic',
 ] as const
 
-// Texto visible: no vacío, sin caracteres de control y con longitud máxima.
+// Texto visible: no vacío, sin caracteres de control, bien formado (sin sustitutos sueltos) y con longitud máxima.
 const visibleText = (max: number) =>
   v.pipe(
     v.string(),
     v.maxLength(max),
     v.check((s) => s.trim() !== '' && !hasControlChars(s), 'texto vacío o con caracteres de control'),
+    v.check(isWellFormed, 'texto mal formado'),
   )
 
 // Etiqueta o nombre visible (identidad, grupo, cuenta, servicio y desiredName de un vínculo). protocol usa este mismo
@@ -81,7 +82,7 @@ export const TimestampSchema = v.pipe(
 export const RevisionSchema = v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(Number.MAX_SAFE_INTEGER))
 const ColorSchema = v.pipe(v.string(), v.regex(/^#[0-9a-fA-F]{6}$/, 'color no válido'))
 const OrderSchema = v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000))
-const EmailSchema = v.pipe(v.string(), v.maxLength(254), v.email())
+const EmailSchema = v.pipe(v.string(), v.maxLength(254), v.check(isWellFormed, 'texto mal formado'), v.email())
 
 // Clave de una imagen subida (icon:<id>): la usan IconRef y los comandos icons.* del host.
 export const IconKeySchema = v.pipe(v.string(), v.regex(/^icon:[A-Za-z0-9_-]{1,64}$/))
@@ -96,6 +97,7 @@ export const IconRefSchema = v.variant('type', [
       v.minLength(1),
       v.maxLength(16),
       v.check((s) => !hasControlChars(s), 'caracteres de control'),
+      v.check(isWellFormed, 'texto mal formado'),
     ),
   }),
   v.strictObject({ type: v.literal('image'), key: IconKeySchema }),
@@ -108,7 +110,7 @@ export const ServiceIdSchema = v.union([
 
 // Carpeta de perfil: un único elemento de ruta, sin "-" inicial (no puede parecer un switch) ni controles (T2).
 export function isSafeDirectoryName(s: string): boolean {
-  return s !== '.' && s !== '..' && !s.startsWith('-') && !/[/\\]/.test(s) && !hasControlChars(s)
+  return s !== '.' && s !== '..' && !s.startsWith('-') && !/[/\\]/.test(s) && !hasControlChars(s) && isWellFormed(s)
 }
 
 export const ProfileDirectorySchema = v.pipe(
@@ -146,13 +148,14 @@ export const AccountSchema = v.strictObject({
   serviceId: ServiceIdSchema,
   label: LabelSchema,
   // La política de URL depende de settings.allowHttp: la comprueba validateData.
-  url: v.optional(v.pipe(v.string(), v.maxLength(MAX_URL_LENGTH))),
+  url: v.optional(v.pipe(v.string(), v.maxLength(MAX_URL_LENGTH), v.check(isWellFormed, 'texto mal formado'))),
   username: v.optional(visibleText(LIMITS.username)),
   notes: v.optional(
     v.pipe(
       v.string(),
       v.maxLength(LIMITS.notes),
       v.check((s) => !hasControlChars(s, '\n\t'), 'caracteres de control'),
+      v.check(isWellFormed, 'texto mal formado'),
     ),
   ),
   icon: IconRefSchema,
@@ -167,7 +170,7 @@ export const AccountSchema = v.strictObject({
 export const CustomServiceSchema = v.strictObject({
   id: IdSchema,
   name: LabelSchema,
-  urlTemplate: v.pipe(v.string(), v.maxLength(MAX_URL_LENGTH)),
+  urlTemplate: v.pipe(v.string(), v.maxLength(MAX_URL_LENGTH), v.check(isWellFormed, 'texto mal formado')),
   multiAccount: v.picklist(['parallel', 'switch', 'none']),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
@@ -220,7 +223,7 @@ export const BindingsSchema = v.pipe(
 
 export const ProfileInfoSchema = v.strictObject({
   directory: ProfileDirectorySchema,
-  name: v.pipe(v.string(), v.maxLength(256)),
+  name: v.pipe(v.string(), v.maxLength(256), v.check(isWellFormed, 'texto mal formado')),
   isUsingDefaultName: v.boolean(),
   color: v.optional(ColorSchema),
 })

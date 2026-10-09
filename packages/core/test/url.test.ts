@@ -95,6 +95,18 @@ describe('normalizeUrl', () => {
     expect(normalizeUrl('https://git\nhub.com/', httpsOnly)).toEqual({ ok: false, error: 'chars' })
   })
 
+  it('rechaza un sustituto suelto antes de parsear', () => {
+    // WHATWG lo sustituiría por U+FFFD (%EF%BF%BD) sin avisar: se rechaza antes de new URL.
+    expect(normalizeUrl('https://example.com/\ud800', { allowHttp: false })).toEqual({ ok: false, error: 'chars' })
+  })
+
+  it('acepta un emoji bien formado y lo codifica', () => {
+    expect(normalizeUrl('https://example.com/😀', { allowHttp: false })).toEqual({
+      ok: true,
+      value: 'https://example.com/%F0%9F%98%80',
+    })
+  })
+
   it('rechaza la URL si al codificarla supera la longitud máxima', () => {
     expect(normalizeUrl('https://example.com/' + 'ñ'.repeat(700), httpsOnly)).toEqual({ ok: false, error: 'length' })
   })

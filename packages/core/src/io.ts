@@ -18,6 +18,7 @@ import {
   type LauncherData,
   type ProfileInfo,
 } from './schema'
+import { isWellFormed } from './text'
 
 export const APP_ID = 'account-launcher'
 export const MAX_IMPORT_BYTES = 5 * 1024 * 1024
@@ -25,7 +26,7 @@ export const MAX_IMPORT_BYTES = 5 * 1024 * 1024
 export const BindingHintSchema = v.strictObject({
   identityId: IdSchema,
   kind: v.picklist(['chromium-profile', 'current']),
-  name: v.optional(v.pipe(v.string(), v.maxLength(256))),
+  name: v.optional(v.pipe(v.string(), v.maxLength(256), v.check(isWellFormed, 'texto mal formado'))),
 })
 
 // Como mucho una pista por identidad, contadas antes de validar cada una (guarda de tamaño, T5). Lo usan el archivo

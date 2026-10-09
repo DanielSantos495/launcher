@@ -6,6 +6,7 @@ import {
   IconKeySchema,
   IdSchema,
   isUrlInGrammar,
+  isWellFormed,
   LauncherDataSchema,
   LIMITS,
   maxKeys,
@@ -36,7 +37,8 @@ export function isValidContainerName(name: string): boolean {
     name.trim() !== '' &&
     !name.startsWith('-') &&
     !name.includes('=') &&
-    !hasControlChars(name)
+    !hasControlChars(name) &&
+    isWellFormed(name)
   )
 }
 export const ContainerNameSchema = v.pipe(v.string(), v.check(isValidContainerName, 'nombre no válido'))
