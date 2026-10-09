@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createTranslator, resolveLanguage } from '../../src/i18n/i18n'
+import { createTranslator, makeTranslator, resolveLanguage } from '../../src/i18n/i18n'
 import { en } from '../../src/i18n/messages.en'
 import { es } from '../../src/i18n/messages.es'
 
@@ -57,8 +57,20 @@ describe('createTranslator', () => {
     expect(tp('common.items', 2, { count: 2 })).toBe('2 items')
   })
 
-  it('tp con una clave inexistente usa .other y, si tampoco existe, devuelve la clave', () => {
+  it('tp con una clave inexistente devuelve la clave .other', () => {
     expect(createTranslator('es').tp('common.nope', 1)).toBe('common.nope.other')
+  })
+
+  it('tp sin la clave .one usa .other', () => {
+    const { tp } = makeTranslator({ 'cosas.other': '{count} cosas' }, 'es')
+    expect(tp('cosas', 1, { count: 1 })).toBe('1 cosas')
+    expect(tp('cosas', 5, { count: 5 })).toBe('5 cosas')
+  })
+
+  it('tp con .one y sin .other: el plural no tiene texto y devuelve la clave .other', () => {
+    const { tp } = makeTranslator({ 'cosas.one': '{count} cosa' }, 'es')
+    expect(tp('cosas', 1, { count: 1 })).toBe('1 cosa')
+    expect(tp('cosas', 2, { count: 2 })).toBe('cosas.other')
   })
 })
 

@@ -14,8 +14,8 @@
     "lint": "pnpm --filter @account-launcher/extension prepare:types && eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest run",
-    "coverage": "vitest run --coverage",
+    "test": "pnpm --filter @account-launcher/extension prepare:types && vitest run",
+    "coverage": "pnpm --filter @account-launcher/extension prepare:types && vitest run --coverage",
     "build": "pnpm --filter @account-launcher/extension build",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm coverage && pnpm build"
   },

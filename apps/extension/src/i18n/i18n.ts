@@ -23,8 +23,9 @@ function interpolate(template: string, params: Params | undefined): string {
   )
 }
 
-export function createTranslator(language: Language) {
-  const catalog = CATALOGS[language]
+// Fábrica interna sobre un catálogo cualquiera (las pruebas le pasan catálogos con claves sueltas). La interfaz
+// pública es createTranslator(language).
+export function makeTranslator(catalog: Readonly<Record<string, string>>, language: Language) {
   const lookup = (key: string): string | undefined => (Object.hasOwn(catalog, key) ? catalog[key] : undefined)
   const plural = new Intl.PluralRules(language)
 
@@ -39,6 +40,10 @@ export function createTranslator(language: Language) {
       return interpolate(lookup(key) ?? lookup(otherKey) ?? otherKey, params)
     },
   }
+}
+
+export function createTranslator(language: Language) {
+  return makeTranslator(CATALOGS[language], language)
 }
 
 export type Translator = ReturnType<typeof createTranslator>
