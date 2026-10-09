@@ -1,0 +1,5 @@
+{
+  "extName": { "message": "Account Launcher" },
+  "extDescription": { "message": "Open each account in its identity's profile." },
+  "actionTitle": { "message": "Open Account Launcher" }
+}

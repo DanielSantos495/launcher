@@ -44,6 +44,26 @@ export default defineConfig([
     },
   },
   {
+    // Extensión: solo src/platform y entrypoints importan la API del navegador (wxt/browser) y nadie usa el global chrome.
+    files: ['apps/extension/**/*.{ts,tsx}'],
+    ignores: ['apps/extension/src/platform/**', 'apps/extension/entrypoints/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { paths: [{ name: 'wxt/browser', message: 'Solo src/platform y entrypoints importan wxt/browser.' }] },
+      ],
+    },
+  },
+  {
+    files: ['apps/extension/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        { name: 'chrome', message: 'Usa browser desde wxt/browser (solo en src/platform y entrypoints).' },
+      ],
+    },
+  },
+  {
     rules: {
       'no-var': 'error',
       'prefer-const': 'error',

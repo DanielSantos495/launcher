@@ -10,13 +10,14 @@
     "node": ">=22.13"
   },
   "scripts": {
-    "typecheck": "tsc -p packages/core/tsconfig.json && tsc -p packages/protocol/tsconfig.json",
-    "lint": "eslint .",
+    "typecheck": "tsc -p packages/core/tsconfig.json && tsc -p packages/protocol/tsconfig.json && pnpm --filter @account-launcher/extension typecheck",
+    "lint": "pnpm --filter @account-launcher/extension prepare:types && eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
-    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm coverage"
+    "build": "pnpm --filter @account-launcher/extension build",
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm coverage && pnpm build"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
