@@ -357,11 +357,6 @@ describe('router: datos locales dañados', () => {
 
 describe('router: tipos sin implementar (temporal)', () => {
   const messages: readonly (readonly [string, unknown])[] = [
-    ['account.openTemporary', { type: 'account.openTemporary', target: { kind: 'url', url: 'https://example.com/' } }],
-    ['capabilities.get', { type: 'capabilities.get' }],
-    ['profiles.list', { type: 'profiles.list' }],
-    ['profiles.create', { type: 'profiles.create', identityId: 'ana', name: 'Ana' }],
-    ['host.ping', { type: 'host.ping' }],
     ['data.import', { type: 'data.import', revision: 0, mode: 'merge', data: createEmptyData() }],
     ['pair.start', { type: 'pair.start' }],
     ['pair.join', { type: 'pair.join', code: '123456' }],

@@ -94,7 +94,8 @@ describe('account.open en el navegador actual', () => {
     expect(own).toEqual({ ok: true, result: { provider: 'current' } })
     expect(t.deps.opened).toHaveLength(1)
     const viaBea = await t.route({ type: 'account.open', accountId: 'mail', asIdentityId: 'bea' })
-    expect(viaBea).toEqual({ ok: false, error: { code: 'unavailable', hint: 'not_implemented' } })
+    // El entorno de prueba no tiene host: el vínculo chromium-profile no se puede abrir.
+    expect(viaBea).toEqual({ ok: false, error: { code: 'unavailable', hint: 'unsupported_browser' } })
     expect(t.deps.opened).toHaveLength(1)
   })
 
@@ -201,23 +202,6 @@ describe('account.open en el navegador actual', () => {
     const stored = loadData(t.local.dump().localData)
     expect(stored.ok && stored.value.identities.map((i) => i.id)).toEqual(['ana', 'bea'])
     expect(storedAccount(t, 'mail')?.lastOpenedAt).toBe(TOUCHED)
-  })
-
-  it('en multi, una identidad con vínculo chromium-profile aún no está implementada', async () => {
-    const t = createTestEnv({
-      local: {
-        localData: {
-          ...createEmptyData(),
-          identities: [identity('ana', 'ana@example.com')],
-          accounts: [account('mail', 'ana')],
-          settings: { ...createEmptyData().settings, mode: 'multi' },
-        },
-        localBindings: { ana: { kind: 'chromium-profile', profileDirectory: 'Profile 1' } },
-      },
-    })
-    const response = await t.route({ type: 'account.open', accountId: 'mail' })
-    expect(response).toEqual({ ok: false, error: { code: 'unavailable', hint: 'not_implemented' } })
-    expect(t.deps.opened).toEqual([])
   })
 
   it('en single se ignoran los vínculos', async () => {

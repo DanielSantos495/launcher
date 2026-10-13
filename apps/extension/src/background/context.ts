@@ -1,9 +1,11 @@
-import { ok, type Result } from '@account-launcher/core'
+import { err, ok, type Result } from '@account-launcher/core'
 import type { UiError } from '@account-launcher/protocol'
 import { ensureInstallation, readToken, type Installation } from '../storage/installation'
 import { createLocalStore } from '../storage/local-store'
 import type { DataStore, Snapshot } from '../storage/data-store'
 import type { SwEnv } from './deps'
+import type { HostClient } from './host-client'
+import { uiError } from './hints'
 import type { Mode } from './mode'
 
 // Todo lo que un manejador necesita saber de la instalación en el momento de atender un mensaje.
@@ -34,4 +36,22 @@ export async function loadContext(env: SwEnv): Promise<Result<SwContext, UiError
     source: 'local',
     store: local,
   })
+}
+
+// Prólogo común de los manejadores: trabajo en la cola con el contexto ya cargado. Un error de carga se devuelve tal cual.
+export function inContext<T>(
+  env: SwEnv,
+  job: (context: SwContext) => Result<T, UiError> | Promise<Result<T, UiError>>,
+): Promise<Result<T, UiError>> {
+  return env.queue.run(async () => {
+    const context = await loadContext(env)
+    return context.ok ? job(context.value) : context
+  })
+}
+
+// Regla general: en "Perfil único" ningún manejador llama al host; sin cliente (navegador no reconocido) tampoco puede.
+export function requireHost(mode: Mode, host: HostClient | undefined): Result<HostClient, UiError> {
+  if (mode === 'single') return err(uiError('unavailable', 'single_mode'))
+  if (host === undefined) return err(uiError('unavailable', 'unsupported_browser'))
+  return ok(host)
 }

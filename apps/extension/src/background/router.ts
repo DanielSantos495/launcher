@@ -10,18 +10,16 @@ import {
 import * as v from 'valibot'
 import type { SwEnv } from './deps'
 import { getBindings, getData, mutateData, setBinding } from './handlers/data'
-import { openAccount } from './handlers/open'
+import { capabilitiesGet, hostPing } from './handlers/capabilities'
+import { openAccount, openTemporary } from './handlers/open'
+import { profilesCreate, profilesList } from './handlers/profiles'
+import type { Handler } from './handlers/types'
 import { uiError } from './hints'
 
 export interface SenderInfo {
   readonly id?: string | undefined
   readonly url?: string | undefined
 }
-
-export type Handler<K extends UiRequestType> = (
-  request: Extract<UiRequest, { type: K }>,
-  env: SwEnv,
-) => Promise<Result<UiResults[K], UiError>>
 
 type Handlers = { readonly [K in UiRequestType]: Handler<K> }
 
@@ -51,11 +49,11 @@ function notImplemented(): Promise<Result<never, UiError>> {
 // Tabla tipada: añadir un tipo a UiRequestSchema sin manejador no compila.
 const HANDLERS: Handlers = {
   'account.open': openAccount,
-  'account.openTemporary': notImplemented,
-  'capabilities.get': notImplemented,
-  'profiles.list': notImplemented,
-  'profiles.create': notImplemented,
-  'host.ping': notImplemented,
+  'account.openTemporary': openTemporary,
+  'capabilities.get': capabilitiesGet,
+  'profiles.list': profilesList,
+  'profiles.create': profilesCreate,
+  'host.ping': hostPing,
   'data.get': getData,
   'data.mutate': mutateData,
   'data.import': notImplemented,

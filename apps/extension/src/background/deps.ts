@@ -1,3 +1,5 @@
+import type { HostClient } from './host-client'
+
 // Contratos del service worker. Todo efecto del navegador entra por SwDeps, así que las pruebas inyectan
 // almacenamiento, reloj, ids y pestañas sin tocar la API real.
 export interface KeyValueArea {
@@ -26,4 +28,5 @@ export interface Queue {
 export interface SwEnv {
   readonly deps: SwDeps
   readonly queue: Queue
+  readonly host: HostClient | undefined // undefined si el navegador no es Brave, Chrome ni Edge
 }

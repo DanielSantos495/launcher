@@ -1,9 +1,9 @@
 import { applyOps, err, ok, type OpError } from '@account-launcher/core'
 import type { UiError } from '@account-launcher/protocol'
-import { loadContext } from '../context'
+import { inContext } from '../context'
 import { uiError } from '../hints'
 import { withMode } from '../mode'
-import type { Handler } from '../router'
+import type { Handler } from './types'
 
 // Los errores de applyOps se traducen a código y pista: nunca llevan la lista de problemas del esquema.
 function opError(error: OpError): UiError {
@@ -18,20 +18,16 @@ function opError(error: OpError): UiError {
 }
 
 export const getData: Handler<'data.get'> = (_request, env) =>
-  env.queue.run(async () => {
-    const context = await loadContext(env)
-    if (!context.ok) return context
-    const snapshot = await context.value.store.read()
+  inContext(env, async (context) => {
+    const snapshot = await context.store.read()
     if (!snapshot.ok) return snapshot
-    return ok({ data: withMode(snapshot.value.data, context.value.mode), source: context.value.source })
+    return ok({ data: withMode(snapshot.value.data, context.mode), source: context.source })
   })
 
 // request.revision se ignora (DC3): las operaciones se reaplican sobre el último estado.
 export const mutateData: Handler<'data.mutate'> = (request, env) =>
-  env.queue.run(async () => {
-    const context = await loadContext(env)
-    if (!context.ok) return context
-    const written = await context.value.store.write((current) => {
+  inContext(env, async (context) => {
+    const written = await context.store.write((current) => {
       const applied = applyOps(current.data, request.ops)
       if (!applied.ok) return err(opError(applied.error))
       return ok({
@@ -43,19 +39,15 @@ export const mutateData: Handler<'data.mutate'> = (request, env) =>
   })
 
 export const getBindings: Handler<'bindings.get'> = (_request, env) =>
-  env.queue.run(async () => {
-    const context = await loadContext(env)
-    if (!context.ok) return context
-    const snapshot = await context.value.store.read()
+  inContext(env, async (context) => {
+    const snapshot = await context.store.read()
     if (!snapshot.ok) return snapshot
     return ok({ bindings: snapshot.value.bindings })
   })
 
 export const setBinding: Handler<'bindings.set'> = (request, env) =>
-  env.queue.run(async () => {
-    const context = await loadContext(env)
-    if (!context.ok) return context
-    const written = await context.value.store.write((current) => {
+  inContext(env, async (context) => {
+    const written = await context.store.write((current) => {
       if (!current.data.identities.some((identity) => identity.id === request.identityId)) {
         return err(uiError('not_found'))
       }
