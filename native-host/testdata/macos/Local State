@@ -1,0 +1,12 @@
+{"profile":{"info_cache":{
+ "Default":{"name":"Trabajo","is_using_default_name":false,"profile_highlight_color":-14737629},
+ "Profile 1":{"name":"Persona 1","is_using_default_name":true,"profile_highlight_color":-1776411},
+ "Launcher-1a2b3c4d":{"name":"Personal","is_using_default_name":false},
+ "Profile 3":{"name":"Borrado","is_using_default_name":false},
+ "Guest Profile":{"name":"Invitado"},
+ "System Profile":{"name":"Sistema"},
+ "-raro":{"name":"x"},
+ "Sin nombre":{"is_using_default_name":false},
+ "No objeto":"x"
+},"last_used":"Default"},
+"profiles":{"profile_basenames_deleted":["Profile 3"]}}
