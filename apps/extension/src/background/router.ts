@@ -1,4 +1,4 @@
-import { err, type Result } from '@account-launcher/core'
+import type { Result } from '@account-launcher/core'
 import {
   UiRequestSchema,
   type UiError,
@@ -11,6 +11,7 @@ import * as v from 'valibot'
 import type { SwEnv } from './deps'
 import { getBindings, getData, mutateData, setBinding } from './handlers/data'
 import { capabilitiesGet, hostPing } from './handlers/capabilities'
+import { importData } from './handlers/import'
 import { openAccount, openTemporary } from './handlers/open'
 import {
   pairDeclare,
@@ -56,10 +57,6 @@ function senderPathname(extensionId: string, sender: SenderInfo): string | undef
   return sameOrigin ? url.pathname : undefined
 }
 
-function notImplemented(): Promise<Result<never, UiError>> {
-  return Promise.resolve(err(uiError('unavailable', 'not_implemented')))
-}
-
 // Tabla tipada: añadir un tipo a UiRequestSchema sin manejador no compila.
 const HANDLERS: Handlers = {
   'account.open': openAccount,
@@ -70,7 +67,7 @@ const HANDLERS: Handlers = {
   'host.ping': hostPing,
   'data.get': getData,
   'data.mutate': mutateData,
-  'data.import': notImplemented,
+  'data.import': importData,
   'bindings.get': getBindings,
   'bindings.set': setBinding,
   'pair.start': pairStart,

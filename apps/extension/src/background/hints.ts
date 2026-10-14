@@ -33,7 +33,6 @@ export const HINTS = [
   'shared_bindings_full',
   'already_paired',
   'import_invalid',
-  'not_implemented', // temporal: la Tarea 6 lo elimina
 ] as const
 
 export type Hint = (typeof HINTS)[number]

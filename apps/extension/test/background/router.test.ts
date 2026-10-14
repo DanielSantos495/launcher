@@ -355,17 +355,6 @@ describe('router: datos locales dañados', () => {
   })
 })
 
-describe('router: tipos sin implementar (temporal)', () => {
-  const messages: readonly (readonly [string, unknown])[] = [
-    ['data.import', { type: 'data.import', revision: 0, mode: 'merge', data: createEmptyData() }],
-  ]
-
-  it.each(messages)('%s devuelve unavailable/not_implemented', async (_type, message) => {
-    const t = createTestEnv()
-    expect(await t.route(message)).toEqual({ ok: false, error: { code: 'unavailable', hint: 'not_implemented' } })
-  })
-})
-
 describe('withMode', () => {
   it('devuelve una copia con el modo indicado y no cambia el original', () => {
     const original = createEmptyData()
