@@ -21,6 +21,11 @@ export const PING_TIMEOUT_MS = 3_000
 // conflict (sync.put) lleva la revisión actual del host; ningún otro error la lleva.
 export type HostCallError = UiError & { readonly revision?: number }
 
+// Error sin la revisión: es lo que se devuelve a la UI (la revisión de un conflict solo sirve al almacén).
+export function toUiError(error: HostCallError): UiError {
+  return error.hint === undefined ? { code: error.code } : { code: error.code, hint: error.hint }
+}
+
 export interface HostClient {
   call<C extends HostCommand>(
     cmd: C,

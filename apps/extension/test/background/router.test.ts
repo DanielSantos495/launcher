@@ -358,13 +358,6 @@ describe('router: datos locales dañados', () => {
 describe('router: tipos sin implementar (temporal)', () => {
   const messages: readonly (readonly [string, unknown])[] = [
     ['data.import', { type: 'data.import', revision: 0, mode: 'merge', data: createEmptyData() }],
-    ['pair.start', { type: 'pair.start' }],
-    ['pair.join', { type: 'pair.join', code: '123456' }],
-    ['pair.declare', { type: 'pair.declare', profileDirectory: 'Default' }],
-    ['pair.list', { type: 'pair.list' }],
-    ['pair.remove', { type: 'pair.remove', installationId: 'abc' }],
-    ['pair.verify', { type: 'pair.verify' }],
-    ['sync.refresh', { type: 'sync.refresh' }],
   ]
 
   it.each(messages)('%s devuelve unavailable/not_implemented', async (_type, message) => {

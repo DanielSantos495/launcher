@@ -1,9 +1,10 @@
 import { err, ok, type Result } from '@account-launcher/core'
 import type { UiError } from '@account-launcher/protocol'
-import { ensureInstallation, readToken, type Installation } from '../storage/installation'
+import { clearPairing, ensureInstallation, readToken, type Installation } from '../storage/installation'
 import { createLocalStore } from '../storage/local-store'
+import { createSharedStore, type SharedStore } from '../storage/shared-store'
 import type { DataStore, Snapshot } from '../storage/data-store'
-import type { SwEnv } from './deps'
+import type { SwDeps, SwEnv } from './deps'
 import type { HostClient } from './host-client'
 import { uiError } from './hints'
 import type { Mode } from './mode'
@@ -15,8 +16,35 @@ export interface SwContext {
   readonly local: DataStore
   readonly localSnapshot: Snapshot
   readonly mode: Mode // localSnapshot.data.settings.mode (DC1)
-  readonly source: 'local' | 'shared' // en esta tarea siempre 'local'; la Tarea 5 añade 'shared'
-  readonly store: DataStore
+  readonly source: 'local' | 'shared' // 'shared' solo con modo multi, token y cliente del host
+  readonly shared: SharedStore | undefined // definido si y solo si source === 'shared'
+  readonly store: DataStore // shared ?? local
+}
+
+// Almacén compartido con su manejo de not_paired: borra el emparejamiento local de esa instalación. Crearlo no llama
+// al host; solo lo hacen read, write y refresh.
+export function createInstallationSharedStore(
+  deps: SwDeps,
+  host: HostClient,
+  token: string,
+  installation: Installation,
+  local: DataStore,
+): SharedStore {
+  return createSharedStore({
+    deps,
+    host,
+    token,
+    local,
+    onNotPaired: async () => {
+      await clearPairing(deps, installation)
+    },
+  })
+}
+
+// Instantánea del almacén de la instalación. Con origen local es la que loadContext ya leyó; con origen compartido, la
+// caché o una lectura del host. Solo vale antes de escribir: tras una escritura hay que volver a leer.
+export function readStore(context: SwContext): Promise<Result<Snapshot, UiError>> {
+  return context.shared === undefined ? Promise.resolve(ok(context.localSnapshot)) : context.shared.read()
 }
 
 // Crea la instalación si falta (ensureInstallation exige la cola: se llama dentro de env.queue.run) y lee el
@@ -27,14 +55,20 @@ export async function loadContext(env: SwEnv): Promise<Result<SwContext, UiError
   const local = createLocalStore(env.deps)
   const localSnapshot = await local.read()
   if (!localSnapshot.ok) return localSnapshot
+  const mode = localSnapshot.value.data.settings.mode
+  const shared =
+    mode === 'multi' && token !== undefined && env.host !== undefined
+      ? createInstallationSharedStore(env.deps, env.host, token, installation, local)
+      : undefined
   return ok({
     installation,
     token,
     local,
     localSnapshot: localSnapshot.value,
-    mode: localSnapshot.value.data.settings.mode,
-    source: 'local',
-    store: local,
+    mode,
+    source: shared === undefined ? 'local' : 'shared',
+    shared,
+    store: shared ?? local,
   })
 }
 

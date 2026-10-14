@@ -10,7 +10,7 @@ import {
 } from '@account-launcher/core'
 import type { UiError } from '@account-launcher/protocol'
 import { createProviders } from '../../providers/providers'
-import { inContext, requireHost } from '../context'
+import { inContext, readStore, requireHost } from '../context'
 import type { SwEnv } from '../deps'
 import { uiError } from '../hints'
 import { withMode } from '../mode'
@@ -43,7 +43,7 @@ async function touchLastOpened(env: SwEnv, accountId: string): Promise<void> {
 export const openAccount: Handler<'account.open'> = async (request, env) => {
   // Primero se decide, dentro de la cola, qué URL y qué destino corresponden.
   const planned = await inContext(env, async (context): Promise<Result<OpenPlan, UiError>> => {
-    const snapshot = await context.store.read()
+    const snapshot = await readStore(context)
     if (!snapshot.ok) return snapshot
     const data = withMode(snapshot.value.data, context.mode)
     const account = data.accounts.find((candidate) => candidate.id === request.accountId)
@@ -77,7 +77,7 @@ export const openTemporary: Handler<'account.openTemporary'> = async (request, e
     if (!host.ok) return host
     const profileDirectory = context.installation.ownProfileDirectory
     if (profileDirectory === undefined) return err(uiError('unavailable', 'declare_profile'))
-    const snapshot = await context.store.read()
+    const snapshot = await readStore(context)
     if (!snapshot.ok) return snapshot
     const data = withMode(snapshot.value.data, context.mode)
     const base = { profileDirectory }

@@ -12,9 +12,20 @@ import type { SwEnv } from './deps'
 import { getBindings, getData, mutateData, setBinding } from './handlers/data'
 import { capabilitiesGet, hostPing } from './handlers/capabilities'
 import { openAccount, openTemporary } from './handlers/open'
+import {
+  pairDeclare,
+  pairJoin,
+  pairList,
+  pairRemove,
+  pairStart,
+  pairVerify,
+  syncRefresh,
+  whoamiProve,
+} from './handlers/pairing'
 import { profilesCreate, profilesList } from './handlers/profiles'
 import type { Handler } from './handlers/types'
 import { uiError } from './hints'
+import { WhoamiProveSchema } from './internal-messages'
 
 export interface SenderInfo {
   readonly id?: string | undefined
@@ -24,6 +35,9 @@ export interface SenderInfo {
 type Handlers = { readonly [K in UiRequestType]: Handler<K> }
 
 const LAUNCHER_PATH = '/launcher.html'
+// La página whoami (§4.7) solo puede enviar whoami.prove (DC6) y el dashboard no puede enviarlo.
+const WHOAMI_PATH = '/whoami.html'
+const WHOAMI_TYPE = 'whoami.prove'
 
 // Devuelve la ruta de la página que envía el mensaje, o undefined si el remitente no es una página de esta
 // extensión. sender.id solo no basta (T1): también debe coincidir el origen de sender.url.
@@ -59,13 +73,13 @@ const HANDLERS: Handlers = {
   'data.import': notImplemented,
   'bindings.get': getBindings,
   'bindings.set': setBinding,
-  'pair.start': notImplemented,
-  'pair.join': notImplemented,
-  'pair.declare': notImplemented,
-  'pair.list': notImplemented,
-  'pair.remove': notImplemented,
-  'pair.verify': notImplemented,
-  'sync.refresh': notImplemented,
+  'pair.start': pairStart,
+  'pair.join': pairJoin,
+  'pair.declare': pairDeclare,
+  'pair.list': pairList,
+  'pair.remove': pairRemove,
+  'pair.verify': pairVerify,
+  'sync.refresh': syncRefresh,
 }
 
 function dispatch<K extends UiRequestType>(
@@ -80,12 +94,29 @@ function failure(error: UiError): UiResponse<never> {
   return { ok: false, error }
 }
 
+// Tipo declarado por el mensaje, solo para decidir qué página puede enviarlo; la validación completa va después.
+function declaredType(message: unknown): unknown {
+  return typeof message === 'object' && message !== null && !Array.isArray(message)
+    ? Reflect.get(message, 'type')
+    : undefined
+}
+
 // Frontera de confianza del service worker (T1): comprueba el remitente y valida el mensaje antes de ejecutar nada.
 // Las respuestas de error solo llevan código y pista; nunca el mensaje recibido ni error.message.
 export function createRouter(env: SwEnv): (message: unknown, sender: SenderInfo) => Promise<UiResponse<unknown>> {
   return async (message, sender) => {
     try {
-      if (senderPathname(env.deps.extensionId, sender) !== LAUNCHER_PATH) return failure(uiError('invalid', 'sender'))
+      const pathname = senderPathname(env.deps.extensionId, sender)
+      if (declaredType(message) === WHOAMI_TYPE) {
+        // whoami.prove solo vale desde /whoami.html: ni el dashboard ni otra ruta de la extensión pueden enviarlo.
+        if (pathname !== WHOAMI_PATH) return failure(uiError('invalid', 'sender'))
+        const proof = v.safeParse(WhoamiProveSchema, message)
+        if (!proof.success) return failure(uiError('invalid'))
+        const proved = await whoamiProve(proof.output, env)
+        return proved.ok ? { ok: true, result: proved.value } : failure(proved.error)
+      }
+      // /whoami.html no puede enviar ningún otro tipo de mensaje.
+      if (pathname !== LAUNCHER_PATH) return failure(uiError('invalid', 'sender'))
       const parsed = v.safeParse(UiRequestSchema, message)
       if (!parsed.success) return failure(uiError('invalid'))
       const result = await dispatch(parsed.output.type, parsed.output, env)

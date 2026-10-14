@@ -1,5 +1,5 @@
 import { err, ok } from '@account-launcher/core'
-import { inContext, requireHost } from '../context'
+import { inContext, readStore, requireHost } from '../context'
 import { uiError } from '../hints'
 import { setBinding } from './data'
 import type { Handler } from './types'
@@ -20,7 +20,7 @@ export const profilesCreate: Handler<'profiles.create'> = async (request, env) =
   const planned = await inContext(env, async (context) => {
     const host = requireHost(context.mode, env.host)
     if (!host.ok) return host
-    const snapshot = await context.store.read()
+    const snapshot = await readStore(context)
     if (!snapshot.ok) return snapshot
     if (!snapshot.value.data.identities.some((identity) => identity.id === request.identityId)) {
       return err(uiError('not_found'))

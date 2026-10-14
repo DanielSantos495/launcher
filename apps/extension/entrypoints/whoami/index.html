@@ -3,10 +3,26 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
     <title>Account Launcher</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        font-size: 1rem;
+        line-height: 1.5;
+      }
+      main {
+        display: grid;
+        min-height: 100vh;
+        place-items: center;
+        padding: 16px;
+        text-align: center;
+      }
+    </style>
   </head>
   <body>
-    <main id="root"></main>
+    <main id="root" role="status" aria-live="polite"></main>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>
