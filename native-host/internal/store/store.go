@@ -115,17 +115,18 @@ func decodeState(b []byte) (*State, error) {
 	return &st, nil
 }
 
-// canonicalize deja el estado en su forma canónica: data y bindings compactados, data ausente como null y listas
-// null o ausentes como vacías. Un bindings ausente se queda nil y Validate lo rechaza.
+// canonicalize deja el estado en su forma canónica: data y bindings tal como los escribe Save (compactos y con
+// U+2028 y U+2029 escapados), data ausente como null y listas null o ausentes como vacías. Así Save y Load son
+// inversos y volver a guardar lo cargado da los mismos bytes. Un bindings ausente se queda nil y Validate lo rechaza.
 func (st *State) canonicalize() error {
 	var err error
-	if st.Data, err = compact(st.Data); err != nil {
+	if st.Data, err = canonical(st.Data); err != nil {
 		return err
 	}
 	if st.Data == nil {
 		st.Data = json.RawMessage("null")
 	}
-	if st.Bindings, err = compact(st.Bindings); err != nil {
+	if st.Bindings, err = canonical(st.Bindings); err != nil {
 		return err
 	}
 	if st.Paired == nil {
@@ -137,16 +138,18 @@ func (st *State) canonicalize() error {
 	return nil
 }
 
-// compact quita los espacios de un valor JSON sin escapar HTML. Un valor vacío (campo ausente) sigue nil.
-func compact(raw json.RawMessage) (json.RawMessage, error) {
+// canonical devuelve el valor JSON raw en la forma que escribe el codificador de Save: sin espacios, sin escapar el
+// HTML y con U+2028 y U+2029 escapados (el codificador lo hace siempre). Se pasa por el mismo codificador en vez de
+// imitarlo, para que no puedan diferir. Un valor vacío (campo ausente) sigue nil.
+func canonical(raw json.RawMessage) (json.RawMessage, error) {
 	if len(raw) == 0 {
 		return nil, nil
 	}
-	var buf bytes.Buffer
-	if err := json.Compact(&buf, raw); err != nil {
+	out, err := encodeJSON(raw)
+	if err != nil {
 		return nil, err
 	}
-	return buf.Bytes(), nil
+	return out, nil
 }
 
 // Save valida y escribe de forma atómica: temporal en la misma carpeta, fsync, rename y fsync de la carpeta.

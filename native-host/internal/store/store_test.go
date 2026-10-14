@@ -238,6 +238,91 @@ func TestLoadToleratesTrailingNewline(t *testing.T) {
 	}
 }
 
+// lineSeparators devuelve un objeto {"a":"..."} con n repeticiones de r y su forma canonica (la que escribe Save y
+// devuelve Load): cada U+2028 o U+2029 queda como un escape de 6 bytes.
+func lineSeparators(r rune, hex string, n int) (received, canonical json.RawMessage) {
+	received = json.RawMessage(`{"a":"` + strings.Repeat(string(r), n) + `"}`)
+	canonical = json.RawMessage(`{"a":"` + strings.Repeat(esc(hex), n) + `"}`)
+	return received, canonical
+}
+
+func TestLineSeparatorsSurviveSaveLoad(t *testing.T) {
+	// n llena exactamente el maximo recibido: 8 bytes de {"a":""} mas 3 por separador.
+	nData := (protocol.MaxSharedDataBytes - len(`{"a":""}`)) / 3
+	nBindings := (protocol.MaxSharedBindingsBytes - len(`{"a":""}`)) / 3
+	dataRecv, dataCanon := lineSeparators(0x2028, "2028", nData)
+	bindRecv, bindCanon := lineSeparators(0x2029, "2029", nBindings)
+	if len(dataRecv) != protocol.MaxSharedDataBytes || len(bindRecv) != protocol.MaxSharedBindingsBytes {
+		t.Fatalf("la prueba debe llenar el maximo recibido: %d y %d", len(dataRecv), len(bindRecv))
+	}
+	small, smallCanon := lineSeparators(0x2028, "2028", 1)
+
+	cases := []struct {
+		name           string
+		data, bindings json.RawMessage
+		wantD, wantB   json.RawMessage
+	}{
+		{"un U+2028 en data", small, json.RawMessage("{}"), smallCanon, json.RawMessage("{}")},
+		{"data llena de U+2028 en el maximo recibido", dataRecv, json.RawMessage("{}"), dataCanon, json.RawMessage("{}")},
+		{"bindings llenos de U+2029 en el maximo recibido", json.RawMessage("{}"), bindRecv, json.RawMessage("{}"), bindCanon},
+		{"los dos a la vez", dataRecv, bindRecv, dataCanon, bindCanon},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			s := open(t, dir)
+			st := store.NewState()
+			if _, perr := st.Put(0, tc.data, tc.bindings); perr != nil {
+				t.Fatalf("Put: %v", perr)
+			}
+			if err := s.Save(st); err != nil {
+				t.Fatalf("Save: %v", err)
+			}
+			first := readShared(t, dir)
+			if len(first) > store.MaxFileBytes {
+				t.Fatalf("Save escribio %d bytes, mas que MaxFileBytes", len(first))
+			}
+			got, err := s.Load()
+			if err != nil {
+				t.Fatalf("Load tras un Save de un Put aceptado: %v", err)
+			}
+			// Lo cargado es la forma canonica: el mismo estado con data y bindings escapados.
+			want := *st
+			want.Data, want.Bindings = tc.wantD, tc.wantB
+			if !reflect.DeepEqual(got, &want) {
+				t.Errorf("Load no es la forma canonica: data de %d bytes (want %d), bindings de %d (want %d)",
+					len(got.Data), len(want.Data), len(got.Bindings), len(want.Bindings))
+			}
+			// Y es estable: guardar lo cargado da los mismos bytes y cargarlo da lo mismo.
+			if err := s.Save(got); err != nil {
+				t.Fatalf("segundo Save: %v", err)
+			}
+			if second := readShared(t, dir); !bytes.Equal(first, second) {
+				t.Errorf("Save->Load->Save no es estable: %d y %d bytes", len(first), len(second))
+			}
+			again, err := s.Load()
+			if err != nil || !reflect.DeepEqual(again, got) {
+				t.Errorf("Save->Load->Save->Load no es estable: %v", err)
+			}
+		})
+	}
+}
+
+func TestLoadRewritesLineSeparators(t *testing.T) {
+	dir := t.TempDir()
+	s := open(t, dir)
+	// Un shared.json escrito a mano con U+2028 y U+2029 literales se carga en la forma que escribe Save.
+	ls, ps := string(rune(0x2028)), string(rune(0x2029))
+	writeShared(t, dir, []byte(`{"format":1,"revision":1,"data":{"a":"`+ls+`"},"bindings":{"b":"`+ps+`"},"maxPairedProfiles":2,"paired":[],"pendingProofs":[]}`))
+	got, err := s.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if string(got.Data) != `{"a":"`+esc("2028")+`"}` || string(got.Bindings) != `{"b":"`+esc("2029")+`"}` {
+		t.Errorf("Data %q, Bindings %q", got.Data, got.Bindings)
+	}
+}
+
 func TestLoadNormalizes(t *testing.T) {
 	dir := t.TempDir()
 	s := open(t, dir)

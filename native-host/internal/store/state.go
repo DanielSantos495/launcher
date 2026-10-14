@@ -72,6 +72,7 @@ func NewState() *State {
 
 // Validate comprueba el estado entero. Los límites de las listas se miran antes de recorrer sus elementos. Data nil
 // vale como null; Bindings nunca puede ser nil ni null (la extensión rechaza null). Las listas nil valen como vacías.
+// Data y bindings se miden con maxStoredData y maxStoredBindings (el valor guardado, no el recibido).
 func (st *State) Validate() error {
 	switch {
 	case st.Format != Format:
@@ -156,11 +157,22 @@ func (p Proof) validate() error {
 	return nil
 }
 
+// maxStoredData y maxStoredBindings son los máximos que Validate admite para lo que hay guardado, no para lo
+// recibido. El codificador de JSON escribe cada U+2028 o U+2029 (3 bytes) como un escape de 6 bytes aunque no
+// escape el HTML, así que el valor guardado puede ocupar hasta el doble de lo recibido y nada más crece. Medir lo
+// guardado con el límite de lo recibido dejaría a Save escribir un archivo que Load rechaza (almacén inservible).
+const (
+	maxStoredData     = 2 * protocol.MaxSharedDataBytes
+	maxStoredBindings = 2 * protocol.MaxSharedBindingsBytes
+)
+
 // Put sustituye data y bindings si baseRevision es la revisión actual y la sube en uno. Con otra base devuelve
 // ConflictAt(actual) y no cambia nada; en la revisión máxima segura devuelve Internal (la siguiente ya no cabría
-// en un número de JavaScript). Data nil se guarda como null. Una forma que Validate rechazaría (bindings que no son
-// un objeto, valores demasiado grandes) también es Internal: el router la validó antes, así que aquí sería un fallo
-// del host. Los bytes se copian: el estado no comparte memoria con los argumentos.
+// en un número de JavaScript). Data nil se guarda como null. Es el único sitio que acota los bytes RECIBIDOS
+// (MaxSharedDataBytes y MaxSharedBindingsBytes): el router ya devolvió too_large antes, así que pasarse aquí, o una
+// forma que Validate rechazaría (bindings que no son un objeto), sería un fallo del host: Internal y nada cambia.
+// Los bytes se guardan tal cual y se copian: el estado no comparte memoria con los argumentos. Save los escribe
+// en su forma canónica (compactos y con U+2028 y U+2029 escapados), que es la que devuelve Load.
 func (st *State) Put(baseRevision int64, data, bindings json.RawMessage) (int64, *protocol.Error) {
 	if baseRevision != st.Revision {
 		return 0, protocol.ConflictAt(st.Revision)
@@ -171,6 +183,9 @@ func (st *State) Put(baseRevision int64, data, bindings json.RawMessage) (int64,
 	if len(data) == 0 {
 		data = json.RawMessage("null")
 	}
+	if len(data) > protocol.MaxSharedDataBytes || len(bindings) > protocol.MaxSharedBindingsBytes {
+		return 0, protocol.Fail(protocol.Internal)
+	}
 	if !validData(data) || !validBindings(bindings) {
 		return 0, protocol.Fail(protocol.Internal)
 	}
@@ -180,14 +195,14 @@ func (st *State) Put(baseRevision int64, data, bindings json.RawMessage) (int64,
 	return st.Revision, nil
 }
 
-// validData: nil o "null" (sin datos todavía) o un objeto JSON de como mucho MaxSharedDataBytes.
+// validData: nil o "null" (sin datos todavía) o un objeto JSON de como mucho maxStoredData bytes.
 func validData(raw json.RawMessage) bool {
-	return len(raw) == 0 || string(raw) == "null" || validObject(raw, protocol.MaxSharedDataBytes)
+	return len(raw) == 0 || string(raw) == "null" || validObject(raw, maxStoredData)
 }
 
-// validBindings: un objeto JSON de como mucho MaxSharedBindingsBytes (nunca nil ni null).
+// validBindings: un objeto JSON de como mucho maxStoredBindings bytes (nunca nil ni null).
 func validBindings(raw json.RawMessage) bool {
-	return validObject(raw, protocol.MaxSharedBindingsBytes)
+	return validObject(raw, maxStoredBindings)
 }
 
 // validObject comprueba, de más barato a más caro, que raw tenga como mucho max bytes, empiece y acabe como un

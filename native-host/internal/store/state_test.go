@@ -76,8 +76,11 @@ func TestValidateAcceptsValidStates(t *testing.T) {
 		{"data nil se trata como null", func(st *store.State) { st.Data = nil }},
 		{"data null", func(st *store.State) { st.Data = json.RawMessage("null") }},
 		{"data objeto vacio", func(st *store.State) { st.Data = json.RawMessage("{}") }},
-		{"data en el maximo", func(st *store.State) { st.Data = objectOfSize(protocol.MaxSharedDataBytes) }},
-		{"bindings en el maximo", func(st *store.State) { st.Bindings = objectOfSize(protocol.MaxSharedBindingsBytes) }},
+		{"data en el maximo recibido", func(st *store.State) { st.Data = objectOfSize(protocol.MaxSharedDataBytes) }},
+		{"bindings en el maximo recibido", func(st *store.State) { st.Bindings = objectOfSize(protocol.MaxSharedBindingsBytes) }},
+		// Lo guardado puede ocupar el doble de lo recibido (cada U+2028 pasa de 3 a 6 bytes al escapar).
+		{"data en el doble del maximo", func(st *store.State) { st.Data = objectOfSize(2 * protocol.MaxSharedDataBytes) }},
+		{"bindings en el doble del maximo", func(st *store.State) { st.Bindings = objectOfSize(2 * protocol.MaxSharedBindingsBytes) }},
 		{"un perfil emparejado como maximo", func(st *store.State) { st.MaxPairedProfiles = 1 }},
 		{"16 perfiles emparejados como maximo", func(st *store.State) { st.MaxPairedProfiles = 16 }},
 		{"sin instalaciones", func(st *store.State) { st.Paired = nil }},
@@ -145,7 +148,7 @@ func TestValidateRejects(t *testing.T) {
 		{"data null truncado", func(st *store.State) { st.Data = json.RawMessage("nul") }},
 		{"data null con sobrante", func(st *store.State) { st.Data = json.RawMessage("nullx") }},
 		{"data con sustituto suelto", func(st *store.State) { st.Data = json.RawMessage(`{"a":"` + esc("d800") + `"}`) }},
-		{"data por encima del maximo", func(st *store.State) { st.Data = objectOfSize(protocol.MaxSharedDataBytes + 1) }},
+		{"data por encima del doble del maximo", func(st *store.State) { st.Data = objectOfSize(2*protocol.MaxSharedDataBytes + 1) }},
 
 		{"bindings nil", func(st *store.State) { st.Bindings = nil }},
 		{"bindings null", func(st *store.State) { st.Bindings = json.RawMessage("null") }},
@@ -153,7 +156,7 @@ func TestValidateRejects(t *testing.T) {
 		{"bindings texto", func(st *store.State) { st.Bindings = json.RawMessage(`"x"`) }},
 		{"bindings json invalido", func(st *store.State) { st.Bindings = json.RawMessage("{") }},
 		{"bindings objeto seguido de otro", func(st *store.State) { st.Bindings = json.RawMessage("{}{}") }},
-		{"bindings por encima del maximo", func(st *store.State) { st.Bindings = objectOfSize(protocol.MaxSharedBindingsBytes + 1) }},
+		{"bindings por encima del doble del maximo", func(st *store.State) { st.Bindings = objectOfSize(2*protocol.MaxSharedBindingsBytes + 1) }},
 
 		{"max perfiles 0", func(st *store.State) { st.MaxPairedProfiles = 0 }},
 		{"max perfiles -1", func(st *store.State) { st.MaxPairedProfiles = -1 }},
@@ -309,6 +312,32 @@ func TestPut(t *testing.T) {
 		}
 		if string(st.Data) != "null" {
 			t.Errorf("Data = %q, want null", st.Data)
+		}
+	})
+
+	t.Run("los bytes recibidos se acotan aqui: el maximo vale y uno mas es internal", func(t *testing.T) {
+		st := store.NewState()
+		d, b := objectOfSize(protocol.MaxSharedDataBytes), objectOfSize(protocol.MaxSharedBindingsBytes)
+		if rev, perr := st.Put(0, d, b); perr != nil || rev != 1 {
+			t.Fatalf("Put en el maximo recibido = %d, %v; want 1, nil", rev, perr)
+		}
+		if err := st.Validate(); err != nil {
+			t.Errorf("el estado tras Put debe seguir siendo valido: %v", err)
+		}
+		// Un byte mas de lo recibido ya no cabe, aunque Validate (que mide lo guardado) lo aceptaria.
+		over := objectOfSize(protocol.MaxSharedDataBytes + 1)
+		if err := (&store.State{Format: 1, Data: over, Bindings: json.RawMessage("{}"), MaxPairedProfiles: 2}).Validate(); err != nil {
+			t.Fatalf("la prueba asume que Validate admite %d bytes guardados: %v", len(over), err)
+		}
+		if _, perr := st.Put(1, over, b); perr == nil || perr.Code != protocol.Internal {
+			t.Errorf("Put con data de max+1 = %v, want internal", perr)
+		}
+		overB := objectOfSize(protocol.MaxSharedBindingsBytes + 1)
+		if _, perr := st.Put(1, d, overB); perr == nil || perr.Code != protocol.Internal {
+			t.Errorf("Put con bindings de max+1 = %v, want internal", perr)
+		}
+		if st.Revision != 1 {
+			t.Errorf("los fallos cambiaron la revision: %d", st.Revision)
 		}
 	})
 

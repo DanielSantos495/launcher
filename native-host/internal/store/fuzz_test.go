@@ -38,6 +38,9 @@ func FuzzLoad(f *testing.F) {
 	if err := seedStore.Close(); err != nil {
 		f.Fatal(err)
 	}
+	// Separadores de linea literales: el codificador los escribe escapados, asi que Load debe dejarlos canonicos.
+	ls, ps := string(rune(0x2028)), string(rune(0x2029))
+	f.Add([]byte(`{"format":1,"revision":1,"data":{"a":"` + ls + `"},"bindings":{"b":"` + ps + `"},"maxPairedProfiles":2,"paired":[],"pendingProofs":[]}`))
 	f.Add([]byte(`{}`))
 	f.Add([]byte(`null`))
 	f.Add([]byte(`{"format":1,"revision":3,"bindings": { "a": 1 },"maxPairedProfiles":2,"paired":null,"pendingProofs":null}` + "\n"))
