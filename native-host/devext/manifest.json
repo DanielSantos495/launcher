@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Account Launcher · host dev",
+  "version": "0.0.1",
+  "description": "Panel para probar a mano el host nativo de Account Launcher (F1-B). No es el producto.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6oZ39e0qrZLEqEGyI/3aZPFPNZ6sfrOpoflAhQwFihiLhS+dMGZllEWTo4YNvaIrhsh1BXBANfS9dUfg/35VzYAuTOqpfhelehKUldRzMUtdDqMNF/JSmtZrRAUcn87i6HWZnBNfaKQZmF+ZsYL8BZgwy8aFQBz9rdkY+Az09ujFcP+zUiCTa60UIkNTLL2kXLHl27ZGru0zjO3MxfTFG/Jpvsi7iL3rCSlKVoKjX+cOPYA4VSoHZci5adJ6eHAVQPBpvHD9+UIzbwTGQ1VHWsvoke9r4VLK/W81zRTz3stPGH11bDi5dI5Bu8ZsJbvKnbbkPjoYWeMj60nSIiuoJQIDAQAB",
+  "permissions": ["nativeMessaging", "storage"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "Account Launcher · host dev" }
+}

@@ -21,6 +21,11 @@ export default defineConfig([
     languageOptions: { globals: { ...globals.node } },
   },
   {
+    // La extensión de desarrollo del host nativo corre en el navegador (páginas de extensión), no en Node.
+    files: ['native-host/devext/**/*.js'],
+    languageOptions: { globals: { ...globals.browser, ...globals.webextensions } },
+  },
+  {
     // core y protocol no tocan la red ni el navegador: cualquier efecto entra por parámetros (los tests quedan fuera).
     files: ['packages/core/**/*.ts', 'packages/protocol/**/*.ts'],
     ignores: ['**/test/**'],

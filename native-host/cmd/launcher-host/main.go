@@ -39,6 +39,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "version":
 		fmt.Fprintln(stdout, Version)
 		return 0
+	case "install", "uninstall", "doctor", "pairing":
+		return runCLI(args, stdout, stderr, defaultCLIDeps())
 	}
 	usage(stderr)
 	return 2
@@ -47,7 +49,11 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 func usage(w io.Writer) {
 	fmt.Fprint(w, `uso: launcher-host <subcomando>
 
-  version   muestra la versión
+  install     instala el host (--browser, --extension-id, --exe, --user-data-dir)
+  uninstall   quita el host (--browser, --purge)
+  doctor      comprueba la instalación (--browser, --verify)
+  pairing     cambia el emparejamiento (--browser, --reset, --max)
+  version     muestra la versión
 `)
 }
 
@@ -69,13 +75,18 @@ func runHost(origin string, stdin io.Reader, stdout io.Writer) int {
 // exeDir es la carpeta del binario, con los enlaces simbólicos resueltos. Si no se puede averiguar devuelve "": serve
 // no la acepta (no es absoluta) y responde internal.
 func exeDir() string {
-	exe, err := os.Executable()
-	if err != nil {
-		return ""
-	}
-	exe, err = filepath.EvalSymlinks(exe)
+	exe, err := executablePath()
 	if err != nil {
 		return ""
 	}
 	return filepath.Dir(exe)
+}
+
+// executablePath es la ruta del binario en ejecución, con los enlaces simbólicos resueltos.
+func executablePath() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(exe)
 }
