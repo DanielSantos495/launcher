@@ -11,7 +11,8 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { es } from '../../src/i18n/messages.es'
-import type { LauncherClient } from '../../src/ui/client'
+import type { UiRequest } from '@account-launcher/protocol'
+import { toUiResponse, type LauncherClient } from '../../src/ui/client'
 import { App } from '../../src/ui/App'
 import { createTestEnv, type TestEnv } from '../helpers/env'
 import { createFakeHost, type FakeHost, type FakeHostOptions } from '../helpers/fake-host'
@@ -52,6 +53,8 @@ interface Seed {
   readonly host?: FakeHostOptions
   readonly hostMode?: FakeHost['mode']
   readonly ownProfileDirectory?: string
+  // Envuelve el cliente del router (por ejemplo, para hacer fallar una petición concreta).
+  readonly wrap?: (client: LauncherClient) => LauncherClient
 }
 
 interface Setup {
@@ -62,6 +65,22 @@ interface Setup {
 }
 
 const fakes: FakeHost[] = []
+
+// Cliente que responde con un error a las peticiones que cumplan `fails` y deja pasar el resto.
+function failing(client: LauncherClient, fails: (request: UiRequest) => boolean): LauncherClient {
+  return {
+    ...client,
+    send(request) {
+      const message: UiRequest = request
+      if (!fails(message)) return client.send(request)
+      return Promise.resolve(
+        toUiResponse<typeof request>({ ok: false, error: { code: 'internal', hint: 'storage_write' } }),
+      )
+    },
+  }
+}
+
+const BOUND: Bindings = { ana: { kind: 'chromium-profile', profileDirectory: 'Default' } }
 
 // Monta el dashboard sobre el router real del service worker. Sin `seed`, es una instalación nueva.
 function setup(seed?: Seed): Setup {
@@ -93,7 +112,7 @@ function setup(seed?: Seed): Setup {
         }
   const t = createTestEnv({ ...(local === undefined ? {} : { local }), ...(fake === undefined ? {} : { host: fake }) })
   const client = createRouterClient(t)
-  render(<App client={client} />)
+  render(<App client={seed?.wrap === undefined ? client : seed.wrap(client)} />)
   return { t, client, fake, user: userEvent.setup() }
 }
 
@@ -291,6 +310,69 @@ describe('identidades y cuentas', () => {
     expect(within(dialog).queryByRole('button', { name: /Borrar/ })).toBeNull()
     await user.click(within(dialog).getByRole('button', { name: 'Cerrar' }))
     expect((await storedData(client)).accounts).toHaveLength(100)
+  })
+
+  it('con exactamente 99 cuentas todavía ofrece borrarlas todas (99 + 1 = 100 operaciones) y lo borra', async () => {
+    const accounts = Array.from({ length: 99 }, (_, i) =>
+      account(`a${String(i)}`, 'ana', `Cuenta ${String(i)}`, { order: i }),
+    )
+    const { user, client } = setup({ identities: [identity('ana', 'Trabajo')], accounts })
+    await user.click(await screen.findByRole('button', { name: 'Acciones de Trabajo' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Borrar identidad' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByText(/Mueve o borra|mueve o borra/)).toBeNull()
+    await user.click(within(dialog).getByRole('button', { name: 'Borrar la identidad y sus 99 cuentas' }))
+    expect(await screen.findByText('Crea tu primera identidad para empezar')).toBeTruthy()
+    const data = await storedData(client)
+    expect(data.identities).toHaveLength(0)
+    expect(data.accounts).toHaveLength(0)
+  })
+
+  it('si el borrado falla después de quitar el vínculo, el vínculo se restaura y se muestra el error', async () => {
+    const { user, client } = setup({
+      identities: [identity('ana', 'Trabajo')],
+      accounts: [account('a1', 'ana', 'Alfa'), account('a2', 'ana', 'Beta', { order: 1 })],
+      mode: 'multi',
+      bindings: BOUND,
+      wrap: (base) =>
+        failing(
+          base,
+          (request) => request.type === 'data.mutate' && request.ops.some((op) => op.type === 'identity.delete'),
+        ),
+    })
+    await user.click(await screen.findByRole('button', { name: 'Acciones de Trabajo' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Borrar identidad' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Borrar la identidad y sus 2 cuentas' }))
+    const alert = await within(dialog).findByRole('alert')
+    expect(alert.textContent).toContain(es['error.internal'])
+    expect(alert.textContent).toContain(es['hint.storage_write'])
+    expect(await client.send({ type: 'bindings.get' })).toEqual({ ok: true, result: { bindings: BOUND } })
+    const data = await storedData(client)
+    expect(data.identities.map((i) => i.id)).toEqual(['ana'])
+    expect(data.accounts).toHaveLength(2)
+    // El diálogo sigue abierto para poder reintentar.
+    expect(screen.getByRole('dialog')).toBeTruthy()
+  })
+
+  it('si no se puede quitar el vínculo, no se borra nada y se muestra el error', async () => {
+    const { user, client } = setup({
+      identities: [identity('ana', 'Trabajo')],
+      accounts: [account('a1', 'ana', 'Alfa')],
+      mode: 'multi',
+      bindings: BOUND,
+      wrap: (base) => failing(base, (request) => request.type === 'bindings.set'),
+    })
+    await user.click(await screen.findByRole('button', { name: 'Acciones de Trabajo' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Borrar identidad' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Borrar la identidad y su cuenta' }))
+    const alert = await within(dialog).findByRole('alert')
+    expect(alert.textContent).toContain(es['error.internal'])
+    expect(await client.send({ type: 'bindings.get' })).toEqual({ ok: true, result: { bindings: BOUND } })
+    const data = await storedData(client)
+    expect(data.identities.map((i) => i.id)).toEqual(['ana'])
+    expect(data.accounts.map((a) => a.id)).toEqual(['a1'])
   })
 
   it('el fallo al guardar se muestra en el diálogo, que sigue abierto', async () => {
