@@ -4,11 +4,13 @@ interface DialogProps {
   readonly title: string
   readonly onClose: () => void
   readonly children: ReactNode
+  // Sin encabezado visible: el título pasa a ser el nombre accesible (aria-label). Lo usa la paleta.
+  readonly bare?: boolean
 }
 
 // <dialog> nativo en modal: el navegador atrapa el foco y deja inerte el resto. Se monta solo mientras está abierto;
 // al desmontarse se cierra y el foco vuelve al elemento que lo abrió.
-export function Dialog({ title, onClose, children }: DialogProps) {
+export function Dialog({ title, onClose, children, bare = false }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
   const titleId = useId()
 
@@ -30,8 +32,9 @@ export function Dialog({ title, onClose, children }: DialogProps) {
   return (
     <dialog
       ref={ref}
-      className="dialog"
-      aria-labelledby={titleId}
+      className={bare ? 'dialog dialog--bare' : 'dialog'}
+      aria-label={bare ? title : undefined}
+      aria-labelledby={bare ? undefined : titleId}
       onCancel={(event) => {
         event.preventDefault()
         onClose()
@@ -42,9 +45,11 @@ export function Dialog({ title, onClose, children }: DialogProps) {
         onClose()
       }}
     >
-      <h2 id={titleId} className="dialog__title">
-        {title}
-      </h2>
+      {bare ? null : (
+        <h2 id={titleId} className="dialog__title">
+          {title}
+        </h2>
+      )}
       {children}
     </dialog>
   )

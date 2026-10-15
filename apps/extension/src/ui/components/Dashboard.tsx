@@ -1,23 +1,32 @@
 import type { Account, Op } from '@account-launcher/core'
 import type { UiError } from '@account-launcher/protocol'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MessageKey } from '../../i18n/i18n'
 import { useI18n } from '../i18n-context'
 import { boardIndex, orderedIdentities, viewSections, warningsIndex } from '../lib/sections'
 import type { Launcher } from '../state/useLauncher'
+import { usePaletteShortcut } from '../state/usePaletteShortcut'
 import type { AccountActions } from './AccountTile'
+import { CommandPalette } from './CommandPalette'
 import { DashboardDialogs, type DialogState } from './DashboardDialogs'
 import { EmptyState } from './EmptyState'
 import { ErrorBanner } from './ErrorBanner'
 import { Header } from './Header'
 import { SectionList, type SectionActions } from './SectionList'
+import { SettingsView } from './SettingsView'
 import { Toasts, type ToastItem } from './Toasts'
 
 const NO_WARNINGS: ReadonlyMap<string, readonly Account[]> = new Map()
 
-// Pantalla principal: cabecera, secciones por identidad o por grupo y los diálogos. Los hooks van antes de los retornos
-// anticipados (carga y error) para respetar el orden de llamadas.
-export function Dashboard({ launcher }: { readonly launcher: Launcher }) {
+interface DashboardProps {
+  readonly launcher: Launcher
+  // Guarda un texto como archivo (exportar copia); en producción es downloadText de platform.
+  readonly download: (filename: string, text: string) => void
+}
+
+// Pantalla principal: cabecera, secciones por identidad o por grupo (o Configuración), la paleta y los diálogos. Los
+// hooks van antes de los retornos anticipados (carga y error) para respetar el orden de llamadas.
+export function Dashboard({ launcher, download }: DashboardProps) {
   const { t } = useI18n()
   const { state, mutate, send, reload } = launcher
   const { data, bindings, profiles } = state
@@ -26,6 +35,10 @@ export function Dashboard({ launcher }: { readonly launcher: Launcher }) {
   const [notice, setNotice] = useState<UiError | undefined>(undefined)
   const [toasts, setToasts] = useState<readonly ToastItem[]>([])
   const toastCounter = useRef(0)
+  const [screen, setScreen] = useState<'board' | 'settings'>('board')
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const mainRef = useRef<HTMLElement>(null)
+  const previousScreen = useRef(screen)
 
   const ownIdentityId = state.installation?.ownIdentityId
   const view = data?.settings.defaultView ?? 'identity'
@@ -64,6 +77,17 @@ export function Dashboard({ launcher }: { readonly launcher: Launcher }) {
     },
     [notify],
   )
+
+  // Al volver de Configuración, el foco pasa al contenido (el botón que lo abría ya no está en pantalla).
+  useEffect(() => {
+    if (previousScreen.current === 'settings' && screen === 'board') mainRef.current?.focus()
+    previousScreen.current = screen
+  }, [screen])
+
+  const openPalette = useCallback((): void => {
+    setPaletteOpen(true)
+  }, [])
+  usePaletteShortcut(data !== undefined, openPalette)
 
   const openAccount = useCallback(
     async (account: Account, asIdentityId?: string): Promise<void> => {
@@ -197,14 +221,21 @@ export function Dashboard({ launcher }: { readonly launcher: Launcher }) {
       <Header
         view={view}
         onViewChange={(next) => {
+          setScreen('board')
           void mutateWithNotice([{ type: 'settings.set', settings: { defaultView: next } }])
         }}
         canAddAccount={hasIdentities}
         onAddAccount={() => {
+          setScreen('board')
           setDialog({ kind: 'account' })
         }}
+        settingsOpen={screen === 'settings'}
+        onSearch={openPalette}
+        onSettings={() => {
+          setScreen((current) => (current === 'settings' ? 'board' : 'settings'))
+        }}
       />
-      <main className="main">
+      <main ref={mainRef} className="main" tabIndex={-1}>
         {notice === undefined ? null : (
           <ErrorBanner
             error={notice}
@@ -213,29 +244,43 @@ export function Dashboard({ launcher }: { readonly launcher: Launcher }) {
             }}
           />
         )}
-        {body}
-        {hasIdentities ? (
-          <div className="board-actions">
-            <button
-              type="button"
-              className="button"
-              onClick={() => {
-                setDialog({ kind: 'identity' })
-              }}
-            >
-              {t('section.newIdentity')}
-            </button>
-            <button
-              type="button"
-              className="button"
-              onClick={() => {
-                setDialog({ kind: 'group' })
-              }}
-            >
-              {t('section.newGroup')}
-            </button>
-          </div>
-        ) : null}
+        {screen === 'settings' ? (
+          <SettingsView
+            launcher={launcher}
+            data={data}
+            download={download}
+            notify={notify}
+            onBack={() => {
+              setScreen('board')
+            }}
+          />
+        ) : (
+          <>
+            {body}
+            {hasIdentities ? (
+              <div className="board-actions">
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => {
+                    setDialog({ kind: 'identity' })
+                  }}
+                >
+                  {t('section.newIdentity')}
+                </button>
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => {
+                    setDialog({ kind: 'group' })
+                  }}
+                >
+                  {t('section.newGroup')}
+                </button>
+              </div>
+            ) : null}
+          </>
+        )}
       </main>
       <DashboardDialogs
         dialog={dialog}
@@ -247,6 +292,20 @@ export function Dashboard({ launcher }: { readonly launcher: Launcher }) {
         onClose={closeDialog}
         onDone={done}
       />
+      {paletteOpen ? (
+        <CommandPalette
+          data={data}
+          index={index}
+          showDestinations={data.settings.mode === 'multi'}
+          onOpen={(account) => {
+            setPaletteOpen(false)
+            void openAccount(account)
+          }}
+          onClose={() => {
+            setPaletteOpen(false)
+          }}
+        />
+      ) : null}
       <Toasts toasts={toasts} onDismiss={dismissToast} />
     </>
   )

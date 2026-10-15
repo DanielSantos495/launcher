@@ -6,14 +6,24 @@ interface HeaderProps {
   readonly onAddAccount: () => void
   // Añadir cuentas necesita al menos una identidad.
   readonly canAddAccount: boolean
-  // Sin manejador el botón queda deshabilitado (la paleta y la configuración llegan en la Tarea 8).
+  // Sin manejador el botón queda deshabilitado (y sin atajo anunciado).
   readonly onSearch?: () => void
   readonly onSettings?: () => void
+  // Configuración abierta: el botón se anuncia como pulsado.
+  readonly settingsOpen?: boolean
 }
 
 const VIEWS = ['identity', 'group'] as const
 
-export function Header({ view, onViewChange, onAddAccount, canAddAccount, onSearch, onSettings }: HeaderProps) {
+export function Header({
+  view,
+  onViewChange,
+  onAddAccount,
+  canAddAccount,
+  onSearch,
+  onSettings,
+  settingsOpen,
+}: HeaderProps) {
   const { t } = useI18n()
   return (
     <header className="app-header">
@@ -22,7 +32,7 @@ export function Header({ view, onViewChange, onAddAccount, canAddAccount, onSear
         <button
           type="button"
           className="button search-button"
-          aria-keyshortcuts="Control+K Meta+K"
+          aria-keyshortcuts={onSearch === undefined ? undefined : 'Control+K Meta+K'}
           disabled={onSearch === undefined}
           onClick={onSearch}
         >
@@ -48,7 +58,13 @@ export function Header({ view, onViewChange, onAddAccount, canAddAccount, onSear
           <button type="button" className="button button--primary" disabled={!canAddAccount} onClick={onAddAccount}>
             {t('header.addAccount')}
           </button>
-          <button type="button" className="button" disabled={onSettings === undefined} onClick={onSettings}>
+          <button
+            type="button"
+            className="button"
+            aria-pressed={settingsOpen}
+            disabled={onSettings === undefined}
+            onClick={onSettings}
+          >
             {t('header.settings')}
           </button>
         </div>
