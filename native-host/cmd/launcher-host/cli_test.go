@@ -53,6 +53,7 @@ func TestCLIUsageErrors(t *testing.T) {
 		{"uninstall", "sobra"},
 		{"doctor", "sobra"},
 		{"doctor", "--nope"},
+		{"doctor", "--browser", "opera"},
 		{"pairing"},
 		{"pairing", "--browser", "brave"},
 		{"pairing", "--reset"},
@@ -72,6 +73,21 @@ func TestCLIUsageErrors(t *testing.T) {
 		if err != nil || len(entries) != 0 {
 			t.Fatalf("%v escribió en la carpeta personal: %v, %v", args, entries, err)
 		}
+	}
+}
+
+// Un navegador desconocido es un error de uso (2); uno conocido sin instalación es un fallo de doctor (1).
+func TestCLIDoctorBrowserValidation(t *testing.T) {
+	f := newCLIFixture(t)
+	if code := f.run("doctor", "--browser", "opera"); code != 2 {
+		t.Fatalf("doctor --browser opera = %d, quiero 2\nstdout: %s\nstderr: %s", code, f.stdout.String(), f.stderr.String())
+	}
+	if !strings.Contains(f.stderr.String(), "navegador desconocido") {
+		t.Fatalf("falta el mensaje de uso: %q", f.stderr.String())
+	}
+	f = newCLIFixture(t)
+	if code := f.run("doctor", "--browser", "brave"); code != 1 {
+		t.Fatalf("doctor --browser brave sin instalar = %d, quiero 1\nstdout: %s\nstderr: %s", code, f.stdout.String(), f.stderr.String())
 	}
 }
 

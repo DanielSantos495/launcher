@@ -24,7 +24,9 @@ go build -trimpath -o bin/launcher-host ./cmd/launcher-host
 - Sin `--browser` instala en los navegadores que encuentra (ejecutable presente). Con un solo `--browser` se puede
   indicar `--exe` y `--user-data-dir` si no están en su sitio de siempre.
 - Reinstalar es seguro: da los mismos archivos y no toca `shared.json` ni `icons/`. Hay que reinstalar cada vez que se
-  recompila el binario (`doctor` compara su hash con el de `config.json`).
+  recompila el binario: la copia instalada no cambia sola. `doctor` compara la copia instalada con el hash que
+  `config.json` guardó al instalar, así que detecta que alguien la manipule después, no que `bin/launcher-host` se haya
+  recompilado sin reinstalar.
 
 ## Comprobar, desinstalar, emparejamiento
 
@@ -83,12 +85,17 @@ Se carga sin empaquetar en `brave://extensions` (modo desarrollador). El icono a
 6. `createProfile`: devuelve `Launcher-…`; en unos segundos aparece en `listProfiles`.
 7. A: `pair.start` → código. B: `pair.join` con el código. A y B: `pair.declare` con su carpeta. A y B: `pair.verify`:
    se abre `whoami` en su propio perfil, se cierra sola y `pair.list` muestra los dos verificados.
-8. A: `pair.declare` con la carpeta de un perfil sin devext y `pair.verify`: página de error; a los 60 s, `pair.list`
-   lo muestra sin verificar.
+8. A: `pair.declare` con la carpeta de un perfil sin devext: `pair.list` muestra a A sin verificar al instante (declarar
+   otra carpeta borra la verificación). `pair.verify`: página de error en ese perfil; el desafío caduca sin respuesta a
+   los 60 s y A sigue sin verificar.
 9. A: `sync.put`; B: `sync.get` devuelve lo mismo.
 10. `openTemporary` sin nombre dos veces: dos contenedores distintos y vacíos. Con nombre `Prueba` dos veces: el mismo.
-    Con nombre `Work`: `name_in_use`.
-11. Un tercer perfil C con devext: `pair.join` con un código nuevo → `limit_reached`.
+    Con nombre `Work`: `name_in_use` solo si el perfil ya tiene un contenedor persistente `Work`. Antes, crear
+    `Work` en `brave://settings/containers` del perfil A, esperar unos segundos a que Brave guarde las preferencias y
+    usar la carpeta de A como `profileDirectory`. Sin ese contenedor el host abre un contenedor temporal llamado `Work`
+    (es lo previsto).
+11. Un tercer perfil C con devext, con A y B emparejados: A: `pair.start` → `limit_reached` (no se emite código); C:
+    `pair.join` con cualquier código → `bad_code`.
 12. `./bin/launcher-host uninstall --browser brave`: `doctor` informa que no está instalado; `ping` desde el panel →
     error de host no encontrado.
 

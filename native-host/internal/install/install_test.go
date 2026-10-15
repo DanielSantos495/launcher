@@ -180,6 +180,22 @@ func TestInstallIsIdempotentAndReplacesTheBinaryFile(t *testing.T) {
 	}
 }
 
+// Una carpeta de instalación que ya existía con permisos más abiertos queda en 0700 (MkdirAll no cambia una existente).
+func TestInstallTightensAnExistingAppDir(t *testing.T) {
+	f := newFixture(t, "brave")
+	app := f.app("brave")
+	if err := os.MkdirAll(app, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(app, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f.mustInstall()
+	if got := perm(t, app); got != 0o700 {
+		t.Fatalf("la carpeta de instalación = %v, quiero 0700", got)
+	}
+}
+
 func TestInstallReplacesAChangedBinary(t *testing.T) {
 	f := newFixture(t, "brave")
 	f.mustInstall()

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/DanielSantos495/launcher/native-host/internal/install"
 )
@@ -133,6 +134,12 @@ func cmdDoctor(args []string, o install.Options, stderr io.Writer) int {
 		return code
 	}
 	if *browser != "" {
+		// Doctor informa de un navegador desconocido como un FALLO (1); aquí es un error de uso (2), como en uninstall.
+		if !slices.ContainsFunc(install.Browsers(o.Home), func(b install.Browser) bool { return b.Name == *browser }) {
+			fmt.Fprintln(stderr, "launcher-host doctor: navegador desconocido (brave, chrome o edge)")
+			fs.Usage()
+			return 2
+		}
 		o.Browsers = []string{*browser}
 	}
 	if install.Doctor(o, *verify) {
