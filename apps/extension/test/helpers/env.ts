@@ -13,7 +13,9 @@ export const DEFAULT_NOW = '2026-10-08T12:00:00.000Z'
 export interface TestEnvOptions {
   // Contenido inicial de storage.local.
   readonly local?: Record<string, unknown>
-  readonly now?: string
+  // Reloj del service worker: una marca fija o una función (para que coincida con el del host falso y los temporizadores
+  // falsos de la prueba).
+  readonly now?: string | (() => Date)
   // Host falso: su send hace de nativeSend y su hostName de hostName. Sin él no hay host (navegador no reconocido).
   readonly host?: FakeHost
   readonly sleep?: (ms: number) => Promise<void>
@@ -40,6 +42,8 @@ export function createTestEnv(options: TestEnvOptions = {}): TestEnv {
   const session = createMemoryArea()
   const opened: string[] = []
   let counter = 0
+  const { now } = options
+  const clock = typeof now === 'function' ? now : () => new Date(now ?? DEFAULT_NOW)
   const deps: SwDeps & { opened: string[] } = {
     local,
     session,
@@ -52,7 +56,7 @@ export function createTestEnv(options: TestEnvOptions = {}): TestEnv {
       opened.push(url)
       return Promise.resolve()
     },
-    now: () => new Date(options.now ?? DEFAULT_NOW),
+    now: clock,
     randomId: () => {
       counter++
       return `id-${String(counter)}`

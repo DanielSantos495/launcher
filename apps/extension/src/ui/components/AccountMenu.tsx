@@ -9,9 +9,11 @@ interface AccountMenuProps {
   readonly onEdit: (account: Account) => void
   readonly onDelete: (account: Account) => void
   readonly onOpenAs: (account: Account, identityId: string) => void
+  // Solo con el proveedor de contenedor temporal disponible (Brave con el programa instalado).
+  readonly onOpenTemporary?: (account: Account) => void
 }
 
-export function AccountMenu({ account, identities, onEdit, onDelete, onOpenAs }: AccountMenuProps) {
+export function AccountMenu({ account, identities, onEdit, onDelete, onOpenAs, onOpenTemporary }: AccountMenuProps) {
   const { t } = useI18n()
   const items: MenuItem[] = [
     {
@@ -30,6 +32,17 @@ export function AccountMenu({ account, identities, onEdit, onDelete, onOpenAs }:
           onOpenAs(account, identity.id)
         },
       })),
+    ...(onOpenTemporary === undefined
+      ? []
+      : [
+          {
+            key: 'temporary',
+            label: t('temporary.open'),
+            onSelect: () => {
+              onOpenTemporary(account)
+            },
+          },
+        ]),
     {
       key: 'delete',
       label: t('common.delete'),

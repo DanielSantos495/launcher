@@ -11,6 +11,8 @@ interface HeaderProps {
   readonly onSettings?: () => void
   // Configuración abierta: el botón se anuncia como pulsado.
   readonly settingsOpen?: boolean
+  // Solo con el contenedor temporal disponible: abre el diálogo de "URL aislada".
+  readonly onOpenIsolatedUrl?: () => void
 }
 
 const VIEWS = ['identity', 'group'] as const
@@ -23,6 +25,7 @@ export function Header({
   onSearch,
   onSettings,
   settingsOpen,
+  onOpenIsolatedUrl,
 }: HeaderProps) {
   const { t } = useI18n()
   return (
@@ -58,6 +61,11 @@ export function Header({
           <button type="button" className="button button--primary" disabled={!canAddAccount} onClick={onAddAccount}>
             {t('header.addAccount')}
           </button>
+          {onOpenIsolatedUrl === undefined ? null : (
+            <button type="button" className="button" onClick={onOpenIsolatedUrl}>
+              {t('header.isolatedUrl')}
+            </button>
+          )}
           <button
             type="button"
             className="button"

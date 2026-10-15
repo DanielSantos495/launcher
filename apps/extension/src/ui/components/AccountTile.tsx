@@ -13,6 +13,8 @@ export interface AccountActions {
   readonly toggleFavorite: (account: Account) => void
   readonly edit: (account: Account) => void
   readonly remove: (account: Account) => void
+  // Solo si el contenedor temporal está disponible; sin él, el menú no ofrece la opción.
+  readonly openTemporary?: (account: Account) => void
 }
 
 export interface AccountTileProps {
@@ -115,6 +117,7 @@ export const AccountTile = memo(function AccountTile({
           onEdit={actions.edit}
           onDelete={actions.remove}
           onOpenAs={actions.open}
+          {...(actions.openTemporary === undefined ? {} : { onOpenTemporary: actions.openTemporary })}
         />
       </div>
       {identity === undefined ? null : (

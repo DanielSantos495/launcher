@@ -61,12 +61,13 @@ export function useLauncher(client: LauncherClient): Launcher {
       client.installation(),
     ])
     if (isStale(alive, coreSeq, seq)) return
+    // Con el error también se guarda la instalación: decide qué aviso se enseña (¿está emparejada?).
     if (!data.ok) {
-      commit((current) => ({ ...current, status: 'error', error: data.error }))
+      commit((current) => ({ ...current, status: 'error', error: data.error, installation }))
       return
     }
     if (!bindings.ok) {
-      commit((current) => ({ ...current, status: 'error', error: bindings.error }))
+      commit((current) => ({ ...current, status: 'error', error: bindings.error, installation }))
       return
     }
     commit((current) => ({

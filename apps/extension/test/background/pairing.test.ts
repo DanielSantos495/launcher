@@ -108,12 +108,23 @@ describe('emparejamiento', () => {
     expect((got as { result: { data: LauncherData } }).result.data.accounts.map((x) => x.id)).toEqual(['acc-a'])
   })
 
-  it('un segundo pair.start con token da un código nuevo sin token y el tercer pair.join es limit_reached', async () => {
-    const { a, c } = await paired()
+  it('con el máximo de perfiles emparejado, pair.start responde limit_reached y no emite código', async () => {
+    const { a } = await paired()
+    const before = requestsOf(fake, 'pair.start')
+    expect(await a.route({ type: 'pair.start' })).toEqual({ ok: false, error: { code: 'limit_reached' } })
+    expect(requestsOf(fake, 'pair.start')).toBe(before + 1)
+    expect(installation(a)).toEqual({ installationId: 'inst-a', paired: true })
+  })
+
+  it('un segundo pair.start con token da un código nuevo sin token y, si el máximo se llena antes, pair.join es limit_reached', async () => {
+    const { a, c } = installations()
+    expect(await a.route({ type: 'pair.start' })).toEqual({ ok: true, result: CODE })
     const again = await a.route({ type: 'pair.start' })
     expect(again).toEqual({ ok: true, result: CODE })
     expect(Object.keys((again as { result: object }).result)).toEqual(['code', 'expiresAt'])
     const code = again.ok ? (again.result as { code: string }).code : ''
+    // Otro perfil llena el máximo antes de que C use el código.
+    registerInstallation(fake, 'inst-x', TOKEN_C)
     expect(await c.route({ type: 'pair.join', code })).toEqual({ ok: false, error: { code: 'limit_reached' } })
     expect(installation(c)).toEqual({ installationId: 'inst-c', paired: false })
     expect(Object.keys(c.local.dump())).not.toContain('pairing')

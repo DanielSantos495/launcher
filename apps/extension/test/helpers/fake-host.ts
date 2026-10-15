@@ -52,6 +52,8 @@ export interface FakeHost {
 }
 
 const DEFAULT_NOW = '2026-10-08T12:00:00.000Z'
+// Tras tantos pair.join fallidos el código vigente se anula (el host real no deja probar códigos sin fin).
+const MAX_JOIN_FAILURES = 5
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
 
 // Texto de base64url determinista: distinto para cada semilla.
@@ -62,7 +64,7 @@ function base64url(seed: number, length: number): string {
 interface CodeRecord {
   code: string
   expiresAt: number
-  used: boolean
+  failures: number // intentos fallidos de pair.join contra este código
 }
 interface NonceRecord {
   nonce: string
@@ -85,7 +87,9 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
   let secrets = 0
   let created = 0
   const pending: { profile: ProfileInfo; seen: number }[] = []
-  const codes: CodeRecord[] = []
+  // Solo hay un código vigente: uno nuevo sustituye al anterior.
+  let activeCode: CodeRecord | undefined
+  let issuedCodes = 0
   const nonces: NonceRecord[] = []
 
   const iso = (offsetSeconds = 0): string => new Date(now().getTime() + offsetSeconds * 1000).toISOString()
@@ -115,8 +119,8 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
   }
 
   function issueCode(): { code: string; expiresAt: string } {
-    const code = String((codes.length * 104_729 + 42_913) % 1_000_000).padStart(6, '0')
-    codes.push({ code, expiresAt: now().getTime() + PAIR_CODE_TTL_SECONDS * 1000, used: false })
+    const code = String((issuedCodes++ * 104_729 + 42_913) % 1_000_000).padStart(6, '0')
+    activeCode = { code, expiresAt: now().getTime() + PAIR_CODE_TTL_SECONDS * 1000, failures: 0 }
     return { code, expiresAt: iso(PAIR_CODE_TTL_SECONDS) }
   }
 
@@ -168,26 +172,40 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
       }
       case 'pair.start': {
         const { installationId, token } = request.args
-        if (token !== undefined) return authed(token, () => success('pair.start', issueCode()))
-        // Sin token solo se puede empezar si no hay almacén (DC13); si ya existe, hay que unirse con un código.
-        if (host.state.store !== undefined) return failure('not_paired')
-        host.state.store = { revision: 0, data: null, bindings: {} }
+        // Con token y el máximo de perfiles ya emparejado, no se emite ningún código.
+        if (token !== undefined) {
+          return authed(token, () =>
+            host.state.installations.length >= maxPairedProfiles
+              ? failure('limit_reached')
+              : success('pair.start', issueCode()),
+          )
+        }
+        // Sin token solo se puede empezar si no queda ninguna instalación emparejada (DC13): con alguna, hay que
+        // unirse con un código. Un almacén que ya existe sin instalaciones conserva sus datos.
+        if (host.state.installations.length > 0) return failure('not_paired')
+        host.state.store ??= { revision: 0, data: null, bindings: {} }
         const first = nextSecret(43)
         host.state.installations.push({ installationId, token: first, pairedAt: iso() })
         return success('pair.start', { ...issueCode(), token: first })
       }
       case 'pair.join': {
         const { installationId, code } = request.args
-        const entry = codes.find((candidate) => candidate.code === code)
-        if (entry === undefined || entry.used || entry.expiresAt <= now().getTime()) return failure('bad_code')
+        const entry = activeCode
+        if (entry === undefined || entry.code !== code || entry.expiresAt <= now().getTime()) {
+          if (entry !== undefined && ++entry.failures >= MAX_JOIN_FAILURES) activeCode = undefined
+          return failure('bad_code')
+        }
+        // El código es de un solo uso: se consume aunque no quepa otro perfil.
+        activeCode = undefined
         if (host.state.installations.length >= maxPairedProfiles) return failure('limit_reached')
-        entry.used = true
         const token = nextSecret(43)
         host.state.installations.push({ installationId, token, pairedAt: iso() })
         return success('pair.join', { token })
       }
       case 'pair.declare':
         return authed(request.args.token, (installation) => {
+          // Otra carpeta invalida la verificación anterior; la misma la conserva.
+          if (installation.profileDirectory !== request.args.profileDirectory) delete installation.verifiedAt
           installation.profileDirectory = request.args.profileDirectory
           if (request.args.identityId === undefined) delete installation.identityId
           else installation.identityId = request.args.identityId
@@ -213,7 +231,8 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
       case 'pair.verify':
         return authed(request.args.token, (installation) => {
           if (installation.profileDirectory === undefined) return failure('not_found')
-          const nonce = nextSecret(22)
+          if (!hasProfile(installation.profileDirectory)) return failure('unknown_profile')
+          const nonce = nextSecret(43)
           nonces.push({
             nonce,
             installationId: installation.installationId,

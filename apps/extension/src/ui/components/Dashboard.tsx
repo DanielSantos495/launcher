@@ -3,6 +3,7 @@ import type { UiError } from '@account-launcher/protocol'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MessageKey } from '../../i18n/i18n'
 import { useI18n } from '../i18n-context'
+import { isStoreFull, loadProblem } from '../lib/data-problem'
 import { boardIndex, orderedIdentities, viewSections, warningsIndex } from '../lib/sections'
 import type { Launcher } from '../state/useLauncher'
 import { usePaletteShortcut } from '../state/usePaletteShortcut'
@@ -13,6 +14,7 @@ import { EmptyState } from './EmptyState'
 import { ErrorBanner } from './ErrorBanner'
 import { Header } from './Header'
 import { SectionList, type SectionActions } from './SectionList'
+import { DataProblemBanner } from './multi/DataProblemBanner'
 import { SettingsView } from './SettingsView'
 import { Toasts, type ToastItem } from './Toasts'
 
@@ -41,6 +43,12 @@ export function Dashboard({ launcher, download }: DashboardProps) {
   const previousScreen = useRef(screen)
 
   const ownIdentityId = state.installation?.ownIdentityId
+  const ownProfileDirectory = state.installation?.ownProfileDirectory
+  // El contenedor temporal solo se ofrece cuando el proveedor está disponible (Brave con el programa instalado).
+  const temporaryAvailable =
+    state.capabilities?.providers.some(
+      (provider) => provider.id === 'brave-temporary-container' && provider.available,
+    ) === true
   const view = data?.settings.defaultView ?? 'identity'
 
   const sections = useMemo(
@@ -108,6 +116,17 @@ export function Dashboard({ launcher, download }: DashboardProps) {
     [mutate],
   )
 
+  // Vuelve a leer la lista compartida del programa y recarga la pantalla.
+  const retryShared = useCallback(async (): Promise<void> => {
+    await send({ type: 'sync.refresh' })
+    await reload()
+  }, [send, reload])
+  // Salida de un problema con la lista compartida: pasar a Perfil único (con la copia local, DC2).
+  const switchToSingle = useCallback(async (): Promise<UiError | undefined> => {
+    const response = await mutate([{ type: 'settings.set', settings: { mode: 'single' } }])
+    return response.ok ? undefined : response.error
+  }, [mutate])
+
   const tileActions = useMemo<AccountActions>(
     () => ({
       open: (account, asIdentityId) => {
@@ -127,8 +146,15 @@ export function Dashboard({ launcher, download }: DashboardProps) {
       remove: (account) => {
         setDialog({ kind: 'deleteAccount', account })
       },
+      ...(temporaryAvailable
+        ? {
+            openTemporary: (account: Account) => {
+              setDialog({ kind: 'temporary', target: { kind: 'account', account } })
+            },
+          }
+        : {}),
     }),
-    [openAccount, mutateWithNotice],
+    [openAccount, mutateWithNotice, temporaryAvailable],
   )
   const sectionActions = useMemo<SectionActions>(
     () => ({
@@ -152,14 +178,19 @@ export function Dashboard({ launcher, download }: DashboardProps) {
   )
 
   if (state.status === 'error' && state.error !== undefined) {
+    const problem = loadProblem(state.error, state.installation)
     return (
       <main className="main">
-        <ErrorBanner
-          error={state.error}
-          onRetry={() => {
-            void reload()
-          }}
-        />
+        {problem === undefined ? (
+          <ErrorBanner
+            error={state.error}
+            onRetry={() => {
+              void reload()
+            }}
+          />
+        ) : (
+          <DataProblemBanner kind={problem} onRetry={retryShared} onUseSingle={switchToSingle} />
+        )}
       </main>
     )
   }
@@ -230,13 +261,31 @@ export function Dashboard({ launcher, download }: DashboardProps) {
           setDialog({ kind: 'account' })
         }}
         settingsOpen={screen === 'settings'}
+        {...(temporaryAvailable
+          ? {
+              onOpenIsolatedUrl: () => {
+                setDialog({ kind: 'temporary', target: { kind: 'url' } })
+              },
+            }
+          : {})}
         onSearch={openPalette}
         onSettings={() => {
           setScreen((current) => (current === 'settings' ? 'board' : 'settings'))
         }}
       />
       <main ref={mainRef} className="main" tabIndex={-1}>
-        {notice === undefined ? null : (
+        {notice === undefined ? null : isStoreFull(notice) ? (
+          <DataProblemBanner
+            kind="too_large"
+            data={data}
+            source={state.source}
+            onRetry={retryShared}
+            onUseSingle={switchToSingle}
+            onDismiss={() => {
+              setNotice(undefined)
+            }}
+          />
+        ) : (
           <ErrorBanner
             error={notice}
             onDismiss={() => {
@@ -287,6 +336,7 @@ export function Dashboard({ launcher, download }: DashboardProps) {
         data={data}
         bindings={bindings}
         ownIdentityId={ownIdentityId}
+        ownProfileDirectory={ownProfileDirectory}
         mutate={mutate}
         send={send}
         onClose={closeDialog}

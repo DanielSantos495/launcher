@@ -7,6 +7,7 @@ import { AccountForm } from './AccountForm'
 import { ConfirmDialog } from './ConfirmDialog'
 import { GroupForm } from './GroupForm'
 import { IdentityForm } from './IdentityForm'
+import { TemporaryContainerDialog, type TemporaryTarget } from './multi/TemporaryContainerDialog'
 
 // Qué diálogo está abierto. `identity`, `group` y `account` sin valor crean una entidad nueva.
 export type DialogState =
@@ -16,6 +17,7 @@ export type DialogState =
   | { readonly kind: 'deleteAccount'; readonly account: Account }
   | { readonly kind: 'deleteIdentity'; readonly identity: Identity }
   | { readonly kind: 'deleteGroup'; readonly group: Group }
+  | { readonly kind: 'temporary'; readonly target: TemporaryTarget }
 
 // data.mutate admite 100 operaciones: borrar una identidad con sus cuentas necesita una por cuenta y una más.
 const MAX_ACCOUNTS_WITH_IDENTITY = 99
@@ -25,6 +27,7 @@ interface DashboardDialogsProps {
   readonly data: LauncherData
   readonly bindings: Bindings
   readonly ownIdentityId: string | undefined
+  readonly ownProfileDirectory: string | undefined
   readonly mutate: Launcher['mutate']
   readonly send: Launcher['send']
   readonly onClose: () => void
@@ -37,6 +40,7 @@ export function DashboardDialogs({
   data,
   bindings,
   ownIdentityId,
+  ownProfileDirectory,
   mutate,
   send,
   onClose,
@@ -101,6 +105,18 @@ export function DashboardDialogs({
           data={data}
           onSave={(account) => apply([{ type: 'account.put', account }], 'toast.account.saved')}
           onCancel={onClose}
+        />
+      )
+    case 'temporary':
+      return (
+        <TemporaryContainerDialog
+          target={dialog.target}
+          ownProfileDirectory={ownProfileDirectory}
+          send={send}
+          onClose={onClose}
+          onDone={() => {
+            onDone('toast.temporary.opened')
+          }}
         />
       )
     case 'deleteAccount': {

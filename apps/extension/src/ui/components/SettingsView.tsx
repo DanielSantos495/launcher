@@ -3,14 +3,20 @@ import type { UiError } from '@account-launcher/protocol'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { MessageKey } from '../../i18n/i18n'
 import { useI18n } from '../i18n-context'
+import { BINDINGS_SECTION_ID } from '../lib/anchors'
 import { formatList } from '../lib/format'
 import { httpBlockers } from '../lib/http-blockers'
+import { orderedIdentities } from '../lib/sections'
 import type { Launcher } from '../state/useLauncher'
 import { CustomServices } from './CustomServices'
 import { ErrorBanner } from './ErrorBanner'
 import { ImportExport } from './ImportExport'
-import { InstallGuide } from './InstallGuide'
 import { ModeSwitch } from './ModeSwitch'
+import { Bindings } from './multi/Bindings'
+import { HostStatus } from './multi/HostStatus'
+import { Pairing } from './multi/Pairing'
+import { StorageMeter } from './multi/StorageMeter'
+import { ThisInstallation } from './multi/ThisInstallation'
 import { SettingSelect } from './SettingSelect'
 import { SettingsSection } from './SettingsSection'
 
@@ -48,8 +54,14 @@ export function SettingsView({ launcher, data, download, notify, onBack }: Setti
     ? [...blockers.accounts.map((account) => account.label), ...blockers.services.map((service) => service.name)]
     : []
   const capabilities = state.capabilities
-  const hostMissing = settings.mode === 'multi' && capabilities !== undefined && !capabilities.host.available
-  const hostReason = capabilities?.providers.find((provider) => provider.id === 'chromium-profile')?.reason
+  const installation = state.installation
+  const identities = useMemo(
+    () => orderedIdentities(data, installation?.ownIdentityId),
+    [data, installation?.ownIdentityId],
+  )
+  // Declarar el perfil, emparejar y vincular hablan con el programa: solo se ofrecen cuando responde.
+  const hostReady = capabilities?.host.available === true
+  const browser = capabilities?.host.available === true ? t(`browser.${capabilities.host.ping.browser}`) : ''
 
   return (
     <div className="settings">
@@ -135,21 +147,52 @@ export function SettingsView({ launcher, data, download, notify, onBack }: Setti
             void change({ mode })
           }}
         >
-          {settings.mode === 'multi' && capabilities === undefined ? (
-            <p className="settings__note" role="status">
-              {t('settings.mode.checking')}
-            </p>
-          ) : null}
-          {hostMissing ? (
-            <InstallGuide
-              reason={hostReason}
-              onRecheck={async () => {
-                await reload()
-              }}
-            />
+          {settings.mode === 'single' && installation?.paired === true ? (
+            <p className="settings__note">{t('pairing.pairedNote')}</p>
           ) : null}
         </ModeSwitch>
       </SettingsSection>
+
+      {settings.mode === 'multi' ? (
+        <>
+          <SettingsSection title={t('host.title')}>
+            <HostStatus capabilities={capabilities} onRecheck={reload} />
+          </SettingsSection>
+          {hostReady ? (
+            <>
+              <SettingsSection title={t('installation.title')}>
+                <ThisInstallation
+                  installation={installation}
+                  profiles={state.profiles}
+                  identities={identities}
+                  send={send}
+                  reload={reload}
+                />
+              </SettingsSection>
+              <SettingsSection title={t('pairing.title')}>
+                <Pairing
+                  installation={installation}
+                  profiles={state.profiles}
+                  identities={identities}
+                  send={send}
+                  reload={reload}
+                />
+              </SettingsSection>
+              <SettingsSection title={t('bindings.title')} id={BINDINGS_SECTION_ID}>
+                <Bindings
+                  identities={identities}
+                  bindings={state.bindings}
+                  profiles={state.profiles}
+                  browser={browser}
+                  send={send}
+                  mutate={mutate}
+                  reload={reload}
+                />
+              </SettingsSection>
+            </>
+          ) : null}
+        </>
+      ) : null}
 
       <SettingsSection title={t('services.title')}>
         <p className="settings__note">{t('services.intro')}</p>
@@ -165,6 +208,10 @@ export function SettingsView({ launcher, data, download, notify, onBack }: Setti
           reload={reload}
           download={download}
         />
+      </SettingsSection>
+
+      <SettingsSection title={t('storage.title')}>
+        <StorageMeter data={data} source={state.source ?? 'local'} />
       </SettingsSection>
     </div>
   )

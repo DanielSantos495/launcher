@@ -180,9 +180,8 @@ describe('el host falso: emparejamiento y datos compartidos', () => {
     expect(again.code).not.toBe(first.code)
   })
 
-  it('pair.join: código desconocido, usado o caducado es bad_code y se respeta el máximo', async () => {
-    let clock = new Date('2026-10-08T12:00:00.000Z')
-    const fake = createFakeHost({ now: () => clock })
+  it('pair.join: un código desconocido o ya usado es bad_code', async () => {
+    const fake = createFakeHost()
     const { token, code } = expectOk(await call(fake, 'pair.start', { installationId: 'inst-a' }))
     expect(await call(fake, 'pair.join', { installationId: 'inst-b', code: '000000' })).toEqual({
       ok: false,
@@ -196,18 +195,95 @@ describe('el host falso: emparejamiento y datos compartidos', () => {
       ok: false,
       error: { code: 'bad_code' },
     })
-    // Con el máximo alcanzado (2 por defecto) llega limit_reached.
-    const next = expectOk(await call(fake, 'pair.start', { installationId: 'inst-a', token: token ?? '' }))
-    expect(await call(fake, 'pair.join', { installationId: 'inst-c', code: next.code })).toEqual({
+  })
+
+  it('un código caduca a los 120 s', async () => {
+    let clock = new Date('2026-10-08T12:00:00.000Z')
+    const fake = createFakeHost({ now: () => clock })
+    const { code } = expectOk(await call(fake, 'pair.start', { installationId: 'inst-a' }))
+    clock = new Date('2026-10-08T12:02:01.000Z')
+    expect(await call(fake, 'pair.join', { installationId: 'inst-b', code })).toEqual({
+      ok: false,
+      error: { code: 'bad_code' },
+    })
+  })
+
+  it('pair.start con token y el máximo de perfiles emparejado es limit_reached y no emite código', async () => {
+    const fake = createFakeHost()
+    const { token } = expectOk(await call(fake, 'pair.start', { installationId: 'inst-a' }))
+    // Con un solo perfil (máximo 2) todavía se emite.
+    const { code } = expectOk(await call(fake, 'pair.start', { installationId: 'inst-a', token: token ?? '' }))
+    expectOk(await call(fake, 'pair.join', { installationId: 'inst-b', code }))
+    expect(fake.state.installations).toHaveLength(2)
+    expect(await call(fake, 'pair.start', { installationId: 'inst-a', token: token ?? '' })).toEqual({
       ok: false,
       error: { code: 'limit_reached' },
     })
-    // Un código caduca a los 120 s.
-    const late = expectOk(await call(fake, 'pair.start', { installationId: 'inst-a', token: token ?? '' }))
-    clock = new Date('2026-10-08T12:02:01.000Z')
-    expect(await call(fake, 'pair.join', { installationId: 'inst-c', code: late.code })).toEqual({
+  })
+
+  it('pair.join con el máximo alcanzado es limit_reached y gasta el código', async () => {
+    const fake = createFakeHost({ maxPairedProfiles: 1 })
+    const { code } = expectOk(await call(fake, 'pair.start', { installationId: 'inst-a' }))
+    expect(await call(fake, 'pair.join', { installationId: 'inst-b', code })).toEqual({
+      ok: false,
+      error: { code: 'limit_reached' },
+    })
+    // El código se consumió: ni siquiera se admite al quitar sitio.
+    fake.state.installations.length = 0
+    expect(await call(fake, 'pair.join', { installationId: 'inst-b', code })).toEqual({
       ok: false,
       error: { code: 'bad_code' },
+    })
+  })
+
+  it('solo hay un código vigente: uno nuevo sustituye al anterior', async () => {
+    const fake = createFakeHost()
+    const { token, code: first } = expectOk(await call(fake, 'pair.start', { installationId: 'inst-a' }))
+    const second = expectOk(await call(fake, 'pair.start', { installationId: 'inst-a', token: token ?? '' }))
+    expect(second.code).not.toBe(first)
+    expect(await call(fake, 'pair.join', { installationId: 'inst-b', code: first })).toEqual({
+      ok: false,
+      error: { code: 'bad_code' },
+    })
+    expectOk(await call(fake, 'pair.join', { installationId: 'inst-b', code: second.code }))
+  })
+
+  it('tras 5 pair.join fallidos el código vigente se anula; con 4 todavía vale', async () => {
+    const wrong = async (fake: FakeHost, times: number): Promise<void> => {
+      for (let attempt = 0; attempt < times; attempt++) {
+        expect(await call(fake, 'pair.join', { installationId: 'inst-x', code: '999999' })).toEqual({
+          ok: false,
+          error: { code: 'bad_code' },
+        })
+      }
+    }
+    const four = createFakeHost()
+    const open = expectOk(await call(four, 'pair.start', { installationId: 'inst-a' }))
+    await wrong(four, 4)
+    expectOk(await call(four, 'pair.join', { installationId: 'inst-b', code: open.code }))
+
+    const five = createFakeHost()
+    const annulled = expectOk(await call(five, 'pair.start', { installationId: 'inst-a' }))
+    await wrong(five, 5)
+    expect(await call(five, 'pair.join', { installationId: 'inst-b', code: annulled.code })).toEqual({
+      ok: false,
+      error: { code: 'bad_code' },
+    })
+    expect(five.state.installations).toHaveLength(1)
+  })
+
+  it('pair.start sin token con un almacén sin instalaciones vuelve a ser el primer emparejamiento y conserva los datos', async () => {
+    const fake = createFakeHost()
+    fake.state.store = { revision: 7, data: { schemaVersion: 1, guardado: true }, bindings: { ana: {} } }
+    const started = expectOk(await call(fake, 'pair.start', { installationId: 'inst-a' }))
+    expect(started.token).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(started.code).toMatch(/^\d{6}$/)
+    expect(fake.state.installations.map((i) => i.installationId)).toEqual(['inst-a'])
+    expect(fake.state.store).toEqual({ revision: 7, data: { schemaVersion: 1, guardado: true }, bindings: { ana: {} } })
+    // Con una instalación emparejada vuelve a ser not_paired.
+    expect(await call(fake, 'pair.start', { installationId: 'inst-b' })).toEqual({
+      ok: false,
+      error: { code: 'not_paired' },
     })
   })
 
@@ -248,7 +324,7 @@ describe('el host falso: emparejamiento y datos compartidos', () => {
     expectOk(await call(fake, 'pair.declare', { token: tokenB, profileDirectory: 'Profile 1' }))
     expect(expectOk(await call(fake, 'pair.verify', { token: tokenB })).expiresAt).toBe('2026-10-08T12:01:00.000Z')
     const [issued] = nonces
-    expect(issued?.nonce).toMatch(/^[A-Za-z0-9_-]{22}$/)
+    expect(issued?.nonce).toMatch(/^[A-Za-z0-9_-]{43}$/)
     expect(issued?.profileDirectory).toBe('Profile 1')
     const nonce = issued?.nonce ?? ''
     expect(await call(fake, 'pair.prove', { token: token ?? '', nonce })).toEqual({
@@ -271,6 +347,35 @@ describe('el host falso: emparejamiento y datos compartidos', () => {
       ok: false,
       error: { code: 'bad_nonce' },
     })
+  })
+
+  it('pair.verify con un perfil declarado que ya no existe es unknown_profile', async () => {
+    const fake = createFakeHost()
+    const { token } = expectOk(await call(fake, 'pair.start', { installationId: 'inst-a' }))
+    expectOk(await call(fake, 'pair.declare', { token: token ?? '', profileDirectory: 'Profile 1' }))
+    fake.state.profiles = fake.state.profiles.filter((profile) => profile.directory !== 'Profile 1')
+    expect(await call(fake, 'pair.verify', { token: token ?? '' })).toEqual({
+      ok: false,
+      error: { code: 'unknown_profile' },
+    })
+    // Sin nonce emitido: nadie puede probar nada.
+    expect(fake.state.installations[0]?.verifiedAt).toBeUndefined()
+  })
+
+  it('pair.declare con otra carpeta borra verifiedAt y con la misma lo conserva', async () => {
+    const fake = createFakeHost()
+    fake.onVerify = () => undefined
+    const { token } = expectOk(await call(fake, 'pair.start', { installationId: 'inst-a' }))
+    const t = token ?? ''
+    expectOk(await call(fake, 'pair.declare', { token: t, profileDirectory: 'Profile 1' }))
+    const [installation] = fake.state.installations
+    if (installation === undefined) throw new Error('falta la instalación')
+    installation.verifiedAt = '2026-10-08T12:00:00.000Z'
+    expectOk(await call(fake, 'pair.declare', { token: t, profileDirectory: 'Profile 1', identityId: 'ana' }))
+    expect(installation.verifiedAt).toBe('2026-10-08T12:00:00.000Z')
+    expectOk(await call(fake, 'pair.declare', { token: t, profileDirectory: 'Default' }))
+    expect(installation.verifiedAt).toBeUndefined()
+    expect(installation.profileDirectory).toBe('Default')
   })
 
   it('sync.put sube la revisión, detecta conflictos y limita los tamaños', async () => {
