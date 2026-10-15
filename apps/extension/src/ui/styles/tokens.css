@@ -1,0 +1,64 @@
+/* Tokens del dashboard. El color de cada identidad solo pinta cintas y puntos, nunca el fondo de un texto. */
+:root {
+  color-scheme: light;
+
+  --ground: #eef1f4;
+  --surface: #ffffff;
+  --ink: #1b2333;
+  --ink-secondary: #5a6475;
+  --line: #d3d9e2;
+  --action: #1f5fbf;
+  --action-ink: #ffffff;
+  --warn: #9a5700;
+  --danger: #b3261e;
+  --danger-ink: #ffffff;
+  --backdrop: rgb(18 22 29 / 0.5);
+
+  /* Fuentes del sistema: nada de fuentes ni recursos de terceros (T6). */
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --text-s: 13px;
+  --text-m: 15px;
+  --text-l: 18px;
+  --text-xl: 22px;
+  --text-xxl: 28px;
+
+  --radius: 10px;
+  --gap: 8px;
+  --column: 1120px;
+  --gutter: 16px;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --ground: #12161d;
+  --surface: #1a2029;
+  --ink: #e6eaf0;
+  --ink-secondary: #9aa4b2;
+  --line: #2c3440;
+  --action: #7aa7f0;
+  --action-ink: #12161d;
+  --warn: #e0a84b;
+  --danger: #f2867e;
+  --danger-ink: #12161d;
+  --backdrop: rgb(0 0 0 / 0.6);
+}
+
+/* "Sistema" (o sin ajuste todavía): sigue la preferencia del sistema operativo. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']):not([data-theme='dark']) {
+    color-scheme: dark;
+
+    --ground: #12161d;
+    --surface: #1a2029;
+    --ink: #e6eaf0;
+    --ink-secondary: #9aa4b2;
+    --line: #2c3440;
+    --action: #7aa7f0;
+    --action-ink: #12161d;
+    --warn: #e0a84b;
+    --danger: #f2867e;
+    --danger-ink: #12161d;
+    --backdrop: rgb(0 0 0 / 0.6);
+  }
+}
