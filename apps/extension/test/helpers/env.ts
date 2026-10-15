@@ -2,11 +2,12 @@ import { createHostClient, PING_TIMEOUT_MS } from '../../src/background/host-cli
 import { createQueue } from '../../src/background/queue'
 import { createRouter } from '../../src/background/router'
 import type { SwDeps, SwEnv } from '../../src/background/deps'
+import { EXTENSION_ID } from '../../src/extension-id'
 import type { UiResponse } from '@account-launcher/protocol'
 import type { FakeHost } from './fake-host'
 import { createMemoryArea, type MemoryArea } from './memory-area'
 
-export const EXTENSION_ID = 'lkiagpaidnmkiaabacdcmfkfhmjloocf'
+export { EXTENSION_ID }
 export const LAUNCHER_URL = `chrome-extension://${EXTENSION_ID}/launcher.html`
 export const DEFAULT_NOW = '2026-10-08T12:00:00.000Z'
 

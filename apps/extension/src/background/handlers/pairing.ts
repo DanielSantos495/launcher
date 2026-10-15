@@ -32,12 +32,36 @@ async function settle<T>(
   return err(toUiError(result.error))
 }
 
-// Guarda el token (y la instalación como emparejada, en una sola escritura) y hace la primera lectura del almacén
-// compartido, que lo siembra con los datos locales si está recién creado. Un fallo de esa lectura no deshace el
-// emparejamiento: el siguiente data.get o sync.refresh lo muestra.
+// Guarda el token (y la instalación como emparejada, en una sola escritura), hace la primera lectura del almacén
+// compartido, que lo siembra con los datos locales si está recién creado, y declara en el host el perfil que esta
+// instalación anunció antes de emparejarse (el host no lo conoce hasta tener el token). Un fallo de la lectura o de la
+// declaración no deshace el emparejamiento: el siguiente data.get o sync.refresh lo muestra y el perfil se puede
+// declarar de nuevo en "Este perfil es…".
 async function enroll(env: SwEnv, context: SwContext, host: HostClient, token: string): Promise<void> {
   const paired = await savePairing(env.deps, context.installation, token)
-  await createInstallationSharedStore(env.deps, host, token, paired, context.local).refresh()
+  const shared = await createInstallationSharedStore(env.deps, host, token, paired, context.local).refresh()
+  const { installationId, ownProfileDirectory: profileDirectory, ownIdentityId } = paired
+  if (profileDirectory === undefined) return
+  // La identidad se eligió entre los datos locales: solo vale si también está en la lista compartida, que puede ser de
+  // otro perfil. Si esa lista no se puede leer tampoco se puede saber, y se trata como ausente.
+  const identityId =
+    shared.ok && shared.value.data.identities.some((identity) => identity.id === ownIdentityId)
+      ? ownIdentityId
+      : undefined
+  const declared = await settle(
+    env,
+    context,
+    await host.call('pair.declare', {
+      token,
+      profileDirectory,
+      ...(identityId === undefined ? {} : { identityId }),
+    }),
+  )
+  // Con not_paired settle ya borró el emparejamiento: no se vuelve a guardar la instalación como emparejada.
+  const revoked = !declared.ok && declared.error.code === 'not_paired'
+  if (ownIdentityId !== undefined && identityId === undefined && !revoked) {
+    await saveInstallation(env.deps, { installationId, paired: true, ownProfileDirectory: profileDirectory })
+  }
 }
 
 export const pairStart: Handler<'pair.start'> = (_request, env) =>

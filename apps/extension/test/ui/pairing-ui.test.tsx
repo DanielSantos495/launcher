@@ -255,6 +255,35 @@ describe('Este perfil es…', () => {
   })
 })
 
+describe('Este perfil es… con una identidad que ya no está en la lista', () => {
+  it('el selector queda en ninguna y guardar no reenvía la identidad vieja', async () => {
+    fake = createFakeHost({ now: clock })
+    const t = createTestEnv({
+      host: fake,
+      now: clock,
+      local: {
+        installation: {
+          installationId: 'inst-a',
+          paired: false,
+          ownProfileDirectory: 'Default',
+          ownIdentityId: 'fantasma',
+        },
+        localData: dataWith('multi', ['ana']),
+      },
+    })
+    const a = await openSettings(t)
+    expect(a.view.getByLabelText<HTMLSelectElement>('Identidad de este perfil (opcional)').value).toBe('')
+    await user.click(a.view.getByRole('button', { name: 'Guardar cambios' }))
+    expect(await a.view.findByText('Declarado: este perfil es «Personal».')).toBeTruthy()
+    expect(a.view.queryByRole('alert')).toBeNull()
+    expect(t.local.dump().installation).toEqual({
+      installationId: 'inst-a',
+      paired: false,
+      ownProfileDirectory: 'Default',
+    })
+  })
+})
+
 describe('verificar este perfil', () => {
   // A y B emparejadas; A tiene declarado el perfil Default.
   async function pairedWithDeclared() {

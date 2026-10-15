@@ -3,11 +3,12 @@ import type { LauncherData } from '@account-launcher/core'
 import { MAX_SHARED_DATA_BYTES } from '@account-launcher/protocol'
 import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { en } from '../../src/i18n/messages.en'
 import { jsonBytes } from '../../src/storage/usage'
 import { dataOfBytes } from '../helpers/data-of-bytes'
 import { createTestEnv, type TestEnv } from '../helpers/env'
 import { createFakeHost, type FakeHost } from '../helpers/fake-host'
-import { dataWith, pairedLocal, registerInstallation, TOKEN_A } from '../helpers/shared-setup'
+import { dataWith, pairedLocal, registerInstallation, TOKEN_A, unpairedLocal } from '../helpers/shared-setup'
 import { dataOf, localOf, makeAccount, makeIdentity, mount, storedData } from '../helpers/ui-setup'
 
 let fake: FakeHost
@@ -200,13 +201,40 @@ describe('problemas con la lista compartida', () => {
   })
 })
 
+describe('almacén lleno al sembrar', () => {
+  it('con más de 512 KB locales, activar la sincronización deja el aviso con Reintentar y Usar Perfil único', async () => {
+    fake = createFakeHost()
+    // "multi" ocupa un byte menos que "single": con +2 los datos en Varios perfiles superan el límite por un byte.
+    const big = dataOfBytes(MAX_SHARED_DATA_BYTES + 2)
+    const local = { ...big, settings: { ...big.settings, mode: 'multi' as const } }
+    expect(jsonBytes(local)).toBe(MAX_SHARED_DATA_BYTES + 1)
+    const t = createTestEnv({ host: fake, local: unpairedLocal('inst-1', local) })
+    const { user, client } = await openSettings(t)
+    await user.click(screen.getByRole('button', { name: 'Activar sincronización' }))
+
+    // La siembra no cabe: la pantalla entera es el aviso, y tiene salida.
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('El almacén compartido está lleno (512 KB)')
+    expect(within(alert).getByRole('button', { name: 'Reintentar' })).toBeTruthy()
+    expect(within(alert).queryByRole('button', { name: 'Descartar' })).toBeNull()
+    await user.click(within(alert).getByRole('button', { name: 'Usar Perfil único' }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).toBeNull()
+    })
+    const shown = await storedData(client)
+    expect(shown.settings.mode).toBe('single')
+    expect(shown.accounts).toHaveLength(local.accounts.length)
+  })
+})
+
 describe('volver a Perfil único estando emparejada', () => {
-  it('explica que se sigue viendo una copia de la lista compartida', async () => {
+  it('avisa de que lo que se cambie en Perfil único no pasa a la lista compartida', async () => {
     const shared = dataOf({ mode: 'multi', identities: [makeIdentity('ana', 'Trabajo')] })
     const t = pairedEnv(shared, shared)
     const { user, client } = await openSettings(t)
-    const note =
-      'Seguirás viendo una copia de la lista compartida; los cambios no se sincronizan hasta que vuelvas a Varios perfiles'
+    const note = 'Lo que cambies en Perfil único no pasará a la lista compartida.'
+    expect(en['pairing.pairedNote']).toBe("Changes you make in Single profile won't reach the shared list.")
     expect(screen.queryByText(note)).toBeNull()
     await user.click(screen.getByRole('radio', { name: 'Perfil único' }))
     expect(await screen.findByText(note)).toBeTruthy()
@@ -229,6 +257,6 @@ describe('volver a Perfil único estando emparejada', () => {
     await waitFor(() => {
       expect(screen.getByRole<HTMLInputElement>('radio', { name: 'Perfil único' }).checked).toBe(true)
     })
-    expect(screen.queryByText(/Seguirás viendo una copia/)).toBeNull()
+    expect(screen.queryByText(/no pasará a la lista compartida/)).toBeNull()
   })
 })

@@ -28,12 +28,13 @@ export function ThisInstallation({ installation, profiles, identities, send, rel
   const [failure, setFailure] = useState<UiError | undefined>()
   const [saving, setSaving] = useState(false)
 
+  const declaredIdentity = identities.find((identity) => identity.id === declaredIdentityId)
   const chosenDirectory = directory ?? declaredDirectory ?? ''
-  const chosenIdentity = identityId ?? declaredIdentityId ?? ''
+  // Una identidad declarada que ya no está en la lista no se puede elegir: el selector la da por ninguna y se guarda así.
+  const chosenIdentity = identityId ?? declaredIdentity?.id ?? ''
   // Si la carpeta declarada ya no aparece en el navegador, sigue siendo una opción para no perderla sin querer.
   const known = profiles.some((profile) => profile.directory === declaredDirectory)
   const declaredProfile = profiles.find((profile) => profile.directory === declaredDirectory)
-  const declaredIdentity = identities.find((identity) => identity.id === declaredIdentityId)
 
   const save = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()

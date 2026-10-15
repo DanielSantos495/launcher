@@ -167,7 +167,7 @@ export const en: Record<MessageKey, string> = {
   'install.title': 'Install the launcher-host program',
   'install.outdated': 'The installed program is a different version. Download the latest and repeat these steps.',
   'install.step1': 'Download launcher-host for macOS from the releases page:',
-  'install.step2': 'Open Terminal and run this command:',
+  'install.step2': 'Open Terminal in the folder where you downloaded it and run this command:',
   'install.step3': 'Come back here and press “Check again”.',
   'install.recheck': 'Check again',
   'install.checking': 'Checking…',
@@ -281,8 +281,7 @@ export const en: Record<MessageKey, string> = {
   'pairing.verifying': 'Verifying…',
   'pairing.verified': 'Verified',
   'pairing.notVerified': 'Not verified: the declared profile does not have this extension paired',
-  'pairing.pairedNote':
-    'You will keep seeing a copy of the shared list; changes are not synced until you go back to Multiple profiles',
+  'pairing.pairedNote': "Changes you make in Single profile won't reach the shared list.",
 
   'bindings.title': 'Links',
   'bindings.intro': 'Each identity opens its accounts in a browser profile, so sessions do not mix.',

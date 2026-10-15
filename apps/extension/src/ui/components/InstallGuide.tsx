@@ -1,9 +1,10 @@
 import type { UnavailableReason } from '@account-launcher/protocol'
 import { useId, useState } from 'react'
+import { EXTENSION_ID } from '../../extension-id'
 import { useI18n } from '../i18n-context'
 
 const RELEASES_URL = 'https://github.com/DanielSantos495/launcher/releases'
-const INSTALL_COMMAND = 'launcher-host install'
+const INSTALL_COMMAND = `./launcher-host install --extension-id ${EXTENSION_ID}`
 
 interface InstallGuideProps {
   // Por qué no hay programa: decide el texto de arriba. Sin motivo conocido se asume que falta.

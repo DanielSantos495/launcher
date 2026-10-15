@@ -37,20 +37,6 @@ export function Pairing({ installation, profiles, identities, send, reload }: Pa
   const [code, setCode] = useState('')
   const [codeError, setCodeError] = useState(false)
 
-  // El perfil declarado antes de emparejar solo está en esta instalación: el host no lo conoce hasta declararlo con el
-  // token. Se repite la declaración al emparejar para que "Verificar este perfil" funcione. Un fallo aquí no deshace
-  // el emparejamiento: el usuario puede volver a declararlo en "Este perfil es…".
-  const redeclare = async (): Promise<void> => {
-    const directory = installation?.ownProfileDirectory
-    if (directory === undefined) return
-    const identityId = installation?.ownIdentityId
-    await send({
-      type: 'pair.declare',
-      profileDirectory: directory,
-      ...(identityId === undefined ? {} : { identityId }),
-    })
-  }
-
   const start = async (): Promise<void> => {
     setBusy(true)
     setFailure(undefined)
@@ -58,7 +44,6 @@ export function Pairing({ installation, profiles, identities, send, reload }: Pa
     const response = await send({ type: 'pair.start' })
     if (response.ok) {
       setIssued(response.result)
-      if (!paired) await redeclare()
       await reload()
     } else if (response.error.code === 'not_paired' && !paired) {
       setAlreadyPaired(true)
@@ -81,7 +66,6 @@ export function Pairing({ installation, profiles, identities, send, reload }: Pa
     const response = await send({ type: 'pair.join', code: typed })
     if (response.ok) {
       setCode('')
-      await redeclare()
       await reload()
     } else {
       setFailure(response.error)

@@ -352,6 +352,118 @@ describe('pair.declare', () => {
   })
 })
 
+describe('perfil declarado antes de emparejar', () => {
+  // Código de emparejamiento nuevo de A.
+  async function codeOf(t: TestEnv): Promise<string> {
+    const started = await t.route({ type: 'pair.start' })
+    if (!started.ok) throw new Error('pair.start falló')
+    return (started.result as { code: string }).code
+  }
+
+  function hostEntry(installationId: string) {
+    return fake.state.installations.find((entry) => entry.installationId === installationId)
+  }
+
+  it('B declara una identidad propia y se une: el host recibe la carpeta sin la identidad y pair.verify funciona', async () => {
+    const { a, b } = installations()
+    // Sin token solo se guarda en local; la identidad de B no existe en la lista de A.
+    expect(await b.route({ type: 'pair.declare', profileDirectory: 'Profile 1', identityId: 'bea' })).toEqual({
+      ok: true,
+      result: {},
+    })
+    expect(requestsOf(fake, 'pair.declare')).toBe(0)
+    expect(await b.route({ type: 'pair.join', code: await codeOf(a) })).toEqual({ ok: true, result: {} })
+
+    expect(requestsOf(fake, 'pair.declare')).toBe(1)
+    expect(hostEntry('inst-b')?.profileDirectory).toBe('Profile 1')
+    expect(hostEntry('inst-b')?.identityId).toBeUndefined()
+    // La instalación tampoco conserva una identidad que no está en la lista compartida.
+    expect(installation(b)).toEqual({ installationId: 'inst-b', paired: true, ownProfileDirectory: 'Profile 1' })
+
+    fake.onVerify = (nonce) => {
+      void b.route({ type: 'whoami.prove', nonce }, `${WHOAMI_URL}#${nonce}`)
+    }
+    expect(await b.route({ type: 'pair.verify' })).toEqual({
+      ok: true,
+      result: { expiresAt: expect.any(String) as unknown },
+    })
+    const listed = await b.route({ type: 'pair.list' })
+    const entries = listed.ok
+      ? (listed.result as { installations: { self: boolean; verifiedAt?: string }[] }).installations
+      : []
+    expect(entries.find((entry) => entry.self)?.verifiedAt).toBe(DEFAULT_NOW)
+  })
+
+  it('con una identidad que sí existe en la lista compartida, el host la recibe (A al activar y B al unirse)', async () => {
+    fake = createFakeHost()
+    const make = (id: string) => createTestEnv({ host: fake, local: unpairedLocal(id, dataWith('multi', ['ana'])) })
+    const a = make('inst-a')
+    const b = make('inst-b')
+    await a.route({ type: 'pair.declare', profileDirectory: 'Default', identityId: 'ana' })
+    await b.route({ type: 'pair.declare', profileDirectory: 'Profile 1', identityId: 'ana' })
+
+    // A siembra el almacén con sus datos: 'ana' ya está en la lista compartida.
+    const code = await codeOf(a)
+    expect(hostEntry('inst-a')).toMatchObject({ profileDirectory: 'Default', identityId: 'ana' })
+    expect(installation(a)).toEqual({
+      installationId: 'inst-a',
+      paired: true,
+      ownProfileDirectory: 'Default',
+      ownIdentityId: 'ana',
+    })
+
+    expect(await b.route({ type: 'pair.join', code })).toEqual({ ok: true, result: {} })
+    expect(hostEntry('inst-b')).toMatchObject({ profileDirectory: 'Profile 1', identityId: 'ana' })
+    expect(installation(b)).toEqual({
+      installationId: 'inst-b',
+      paired: true,
+      ownProfileDirectory: 'Profile 1',
+      ownIdentityId: 'ana',
+    })
+  })
+
+  it('sin perfil declarado no se llama a pair.declare', async () => {
+    const { a, b } = installations()
+    expect(await b.route({ type: 'pair.join', code: await codeOf(a) })).toEqual({ ok: true, result: {} })
+    expect(requestsOf(fake, 'pair.declare')).toBe(0)
+  })
+
+  it('si no se puede leer la lista compartida, el host recibe solo la carpeta y la identidad se quita', async () => {
+    const { a, b } = installations()
+    await b.route({ type: 'pair.declare', profileDirectory: 'Profile 1', identityId: 'bea' })
+    const code = await codeOf(a)
+    if (fake.state.store !== undefined) fake.state.store.data = { ...dataWith('multi'), schemaVersion: 2 }
+    expect(await b.route({ type: 'pair.join', code })).toEqual({ ok: true, result: {} })
+    expect(hostEntry('inst-b')?.profileDirectory).toBe('Profile 1')
+    expect(hostEntry('inst-b')?.identityId).toBeUndefined()
+    expect(installation(b)).toEqual({ installationId: 'inst-b', paired: true, ownProfileDirectory: 'Profile 1' })
+  })
+
+  it('si el host responde not_paired al declarar, la instalación queda sin emparejar y conserva lo declarado', async () => {
+    const { a, b } = installations()
+    await b.route({ type: 'pair.declare', profileDirectory: 'Profile 1', identityId: 'bea' })
+    const code = await codeOf(a)
+    fake.override = ({ cmd }) => (cmd === 'pair.declare' ? { ok: false, error: { code: 'not_paired' } } : undefined)
+    expect(await b.route({ type: 'pair.join', code })).toEqual({ ok: true, result: {} })
+    expect(installation(b)).toEqual({
+      installationId: 'inst-b',
+      paired: false,
+      ownProfileDirectory: 'Profile 1',
+      ownIdentityId: 'bea',
+    })
+    expect(Object.keys(b.local.dump())).not.toContain('pairing')
+  })
+
+  it('un fallo del host al declarar no deshace el emparejamiento', async () => {
+    const { a, b } = installations()
+    await b.route({ type: 'pair.declare', profileDirectory: 'Profile 1' })
+    const code = await codeOf(a)
+    fake.override = ({ cmd }) => (cmd === 'pair.declare' ? { ok: false, error: { code: 'internal' } } : undefined)
+    expect(await b.route({ type: 'pair.join', code })).toEqual({ ok: true, result: {} })
+    expect(installation(b)).toEqual({ installationId: 'inst-b', paired: true, ownProfileDirectory: 'Profile 1' })
+  })
+})
+
 describe('pair.verify y whoami.prove', () => {
   it('sin perfil declarado es declare_profile y no llama al host', async () => {
     const { a } = await paired()

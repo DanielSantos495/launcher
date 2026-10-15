@@ -132,7 +132,9 @@ export function ImportExport({ data, bindings, profiles, send, reload, download 
               {t('import.unresolved', { list: formatList(language, result.names) })}{' '}
               <a
                 href={`#${BINDINGS_SECTION_ID}`}
-                onClick={() => {
+                onClick={(event) => {
+                  // Sin esto el hash cambia la URL y el icono de la extensión abre otro dashboard en lugar de este.
+                  event.preventDefault()
                   document.getElementById(BINDINGS_SECTION_ID)?.focus()
                 }}
               >

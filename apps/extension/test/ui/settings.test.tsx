@@ -2,7 +2,7 @@
 import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { es } from '../../src/i18n/messages.es'
-import { createTestEnv } from '../helpers/env'
+import { createTestEnv, EXTENSION_ID } from '../helpers/env'
 import { createFakeHost, type FakeHost } from '../helpers/fake-host'
 import { localOf, makeAccount, makeIdentity, makeService, mount, storedData } from '../helpers/ui-setup'
 
@@ -101,7 +101,9 @@ describe('modo', () => {
     expect(within(guide).getByRole('link').getAttribute('href')).toBe(
       'https://github.com/DanielSantos495/launcher/releases',
     )
-    expect(steps[1]?.textContent).toContain('launcher-host install')
+    // El comando lleva el ID de la extensión: sin --extension-id el programa no se instala.
+    expect(within(guide).getByText(`./launcher-host install --extension-id ${EXTENSION_ID}`)).toBeTruthy()
+    expect(steps[1]?.textContent).toContain('./launcher-host install --extension-id')
     expect(steps[2]?.textContent).toContain('Comprobar de nuevo')
     expect(screen.getByRole<HTMLInputElement>('radio', { name: 'Varios perfiles' }).checked).toBe(true)
   })

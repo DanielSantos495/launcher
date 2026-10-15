@@ -259,6 +259,20 @@ describe('importar en Varios perfiles', () => {
     expect(link.getAttribute('href')).toBe('#bindings')
   })
 
+  it('"Ir a Vínculos" lleva el foco a la sección sin cambiar la URL', async () => {
+    const { user } = await openSettings({ mode: 'multi', fake: createFakeHost() })
+    await user.upload(fileInput(), file(withHint('Oficina')))
+    await screen.findByRole('dialog', { name: 'Importar copia' })
+    await user.click(screen.getByRole('button', { name: 'Fusionar' }))
+    const link = await screen.findByRole('link', { name: 'Ir a Vínculos' })
+    const before = window.location.href
+    await user.click(link)
+    // Un cambio de hash haría que el icono de la extensión abra otro dashboard en lugar de enfocar este.
+    expect(window.location.href).toBe(before)
+    expect(window.location.hash).toBe('')
+    expect(document.activeElement?.id).toBe('bindings')
+  })
+
   it('una pista que coincide con un perfil se vincula y no queda pendiente', async () => {
     const { user, client } = await openSettings({ mode: 'multi', fake: createFakeHost() })
     await user.upload(fileInput(), file(withHint('Personal')))

@@ -166,7 +166,7 @@ export const es = {
   'install.title': 'Instala el programa launcher-host',
   'install.outdated': 'El programa instalado es de otra versión. Descarga la última y repite estos pasos.',
   'install.step1': 'Descarga launcher-host para macOS desde la página de versiones:',
-  'install.step2': 'Abre Terminal y ejecuta este comando:',
+  'install.step2': 'Abre Terminal en la carpeta donde lo descargaste y ejecuta este comando:',
   'install.step3': 'Vuelve aquí y pulsa «Comprobar de nuevo».',
   'install.recheck': 'Comprobar de nuevo',
   'install.checking': 'Comprobando…',
@@ -282,8 +282,7 @@ export const es = {
   'pairing.verifying': 'Verificando…',
   'pairing.verified': 'Verificado',
   'pairing.notVerified': 'No verificado: el perfil declarado no tiene esta extensión emparejada',
-  'pairing.pairedNote':
-    'Seguirás viendo una copia de la lista compartida; los cambios no se sincronizan hasta que vuelvas a Varios perfiles',
+  'pairing.pairedNote': 'Lo que cambies en Perfil único no pasará a la lista compartida.',
 
   'bindings.title': 'Vínculos',
   'bindings.intro': 'Cada identidad abre sus cuentas en un perfil del navegador, así las sesiones no se mezclan.',

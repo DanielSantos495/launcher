@@ -55,7 +55,9 @@ export function DataProblemBanner({ kind, data, source, onRetry, onUseSingle, on
           ) : null}
         </div>
         <div className="banner__actions">
-          {kind === 'too_large' ? null : (
+          {/* Descartable, acompaña a la pantalla (una escritura no cupo) y no ofrece acciones. Sin onDismiss es la
+              pantalla entera (la siembra no cupo) y necesita salida. */}
+          {kind === 'too_large' && onDismiss !== undefined ? null : (
             <>
               <button
                 type="button"
