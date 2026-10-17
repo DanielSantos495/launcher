@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildSections, sortAccounts } from '../src/view'
+import { buildSections, recentAccounts, sortAccounts } from '../src/view'
 import { account, data, group, identity } from './fixtures'
 
 const people = [identity({ order: 0 }), identity({ id: 'id-home', label: 'Casa', order: 1 })]
@@ -156,5 +156,44 @@ describe('buildSections', () => {
       buildSections(input, view, own)
       expect(input).toEqual(messy)
     })
+  })
+})
+
+describe('recentAccounts', () => {
+  const at = (n: number) => `2026-10-${String(n).padStart(2, '0')}T10:00:00.000Z`
+
+  it('ordena por apertura reciente y desempata por id', () => {
+    const d = data({
+      accounts: [
+        account({ id: 'b', lastOpenedAt: at(5) }),
+        account({ id: 'a', lastOpenedAt: at(5) }),
+        account({ id: 'c', lastOpenedAt: at(9) }),
+        account({ id: 'd', lastOpenedAt: at(1) }),
+      ],
+    })
+    expect(recentAccounts(d).map((x) => x.id)).toEqual(['c', 'a', 'b', 'd'])
+  })
+
+  it('omite las que nunca se abrieron y devuelve vacío si no hay ninguna', () => {
+    expect(recentAccounts(data({ accounts: [account({ id: 'a' })] }))).toEqual([])
+    expect(
+      recentAccounts(data({ accounts: [account({ id: 'a' }), account({ id: 'b', lastOpenedAt: at(2) })] })).map(
+        (x) => x.id,
+      ),
+    ).toEqual(['b'])
+  })
+
+  it('corta en 10 (frontera: 10 y 11 cuentas) y por defecto se queda con las más recientes', () => {
+    const make = (n: number) =>
+      data({
+        accounts: Array.from({ length: n }, (_, i) =>
+          account({ id: `a${String(i).padStart(2, '0')}`, lastOpenedAt: at(i + 1) }),
+        ),
+      })
+    expect(recentAccounts(make(10))).toHaveLength(10)
+    const eleven = recentAccounts(make(11))
+    expect(eleven).toHaveLength(10)
+    expect(eleven[0]?.id).toBe('a10')
+    expect(eleven.some((x) => x.id === 'a00')).toBe(false)
   })
 })

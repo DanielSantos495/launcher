@@ -45,3 +45,15 @@ export function buildSections(data: LauncherData, view: 'identity' | 'group', ow
   if (ungrouped.length > 0) sections.push({ key: 'ungrouped', groupId: null, accounts: sortAccounts(ungrouped) })
   return sections
 }
+
+// Máximo de cuentas de la vista "Recientes".
+export const RECENT_LIMIT = 10
+
+// Las últimas cuentas abiertas: lastOpenedAt descendente (la fecha es canónica, así que el texto ordena igual que el
+// tiempo) y desempate por id. Las que nunca se abrieron no aparecen.
+export function recentAccounts(data: LauncherData, limit: number = RECENT_LIMIT): Account[] {
+  return data.accounts
+    .filter((a): a is Account & { lastOpenedAt: string } => a.lastOpenedAt !== undefined)
+    .sort((a, b) => compareId(b.lastOpenedAt, a.lastOpenedAt) || compareId(a.id, b.id))
+    .slice(0, limit)
+}

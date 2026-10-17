@@ -6,6 +6,7 @@ import {
   imagesSize,
   isRelevantChange,
   parseInstallation,
+  parseSeenProfiles,
   toUiResponse,
   type LauncherClient,
 } from '../ui/client'
@@ -47,6 +48,23 @@ export function createBrowserClient(): LauncherClient {
         return imagesSize(index, keys.length === 0 ? {} : await browser.storage.local.get(keys))
       } catch {
         return 0
+      }
+    },
+    async seenProfiles() {
+      try {
+        const stored = await browser.storage.local.get(LOCAL_KEYS.seenProfiles)
+        return parseSeenProfiles(
+          Object.hasOwn(stored, LOCAL_KEYS.seenProfiles) ? stored[LOCAL_KEYS.seenProfiles] : undefined,
+        )
+      } catch {
+        return undefined
+      }
+    },
+    async saveSeenProfiles(directories) {
+      try {
+        await browser.storage.local.set({ [LOCAL_KEYS.seenProfiles]: directories })
+      } catch {
+        // Sin guardar, el aviso volverá a salir: es mejor que romper la pantalla.
       }
     },
     subscribe(listener) {

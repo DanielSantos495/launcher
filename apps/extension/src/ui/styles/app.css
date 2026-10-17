@@ -502,6 +502,28 @@ kbd {
   gap: var(--gap);
 }
 
+/* Aviso informativo (perfil nuevo): mismo bloque que el de error, con la cinta en el color de acción. */
+.banner--info {
+  border-color: var(--line);
+  border-left-color: var(--action);
+}
+
+/* Reordenar: la tarjeta arrastrada se atenúa y la de destino se marca (sin color solo: el borde cambia de grosor). */
+.tile--dragging {
+  opacity: 0.5;
+}
+
+.tile--over,
+.section--over > .section__body > .section__header {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.recent__title {
+  margin-bottom: 12px;
+  font-size: var(--text-l);
+}
+
 /* Diálogos: el único sitio con sombra y movimiento */
 .dialog {
   width: min(520px, calc(100vw - 32px));

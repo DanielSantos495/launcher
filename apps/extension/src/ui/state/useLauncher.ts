@@ -23,6 +23,8 @@ export interface Launcher {
   readonly mutate: (ops: Op[]) => Promise<UiResponse<UiResults['data.mutate']>>
   readonly send: LauncherClient['send']
   readonly reload: () => Promise<void>
+  // El cliente del navegador, para lo que no pasa por el service worker (carpetas de perfil vistas).
+  readonly client: LauncherClient
 }
 
 export const REFRESH_MS = 30_000
@@ -188,5 +190,5 @@ export function useLauncher(client: LauncherClient): Launcher {
     await Promise.all([loadCore(), loadHost()])
   }, [loadCore, loadHost])
 
-  return { state, mutate, send, reload }
+  return { state, mutate, send, reload, client }
 }

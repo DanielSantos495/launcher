@@ -1,4 +1,5 @@
 import type { Account, Group, Identity, IconRef, Section } from '@account-launcher/core'
+import type { DragState, ReorderActions } from '../state/useReorder'
 import { useI18n } from '../i18n-context'
 import { sameDestination, type BoardIndex } from '../lib/sections'
 import { AccountTile, type AccountActions } from './AccountTile'
@@ -15,6 +16,15 @@ export interface SectionActions {
   readonly deleteGroup: (group: Group) => void
 }
 
+// Todo lo que la lista necesita para reordenar; sin él no hay arrastre ni "Mover".
+export interface ReorderView {
+  readonly actions: ReorderActions
+  readonly drag: DragState
+  // Banda de una cuenta (ver accountBand): solo se mueve dentro de la suya.
+  readonly bandOf: (account: Account) => string
+  readonly ownIdentityId: string | undefined
+}
+
 interface SectionListProps {
   readonly sections: readonly Section[]
   readonly view: 'identity' | 'group'
@@ -26,9 +36,15 @@ interface SectionListProps {
   readonly warnings: ReadonlyMap<string, readonly Account[]>
   readonly tileActions: AccountActions
   readonly sectionActions: SectionActions
+  readonly reorder?: ReorderView
 }
 
 const NO_WARNINGS: readonly Account[] = []
+
+// El vecino existe y está en la misma banda que la cuenta.
+function sameBand(neighbour: Account | undefined, account: Account, bandOf: (account: Account) => string): boolean {
+  return neighbour !== undefined && bandOf(neighbour) === bandOf(account)
+}
 const FOLDER: IconRef = { type: 'bundled', name: 'folder' }
 
 export function SectionList({
@@ -40,8 +56,11 @@ export function SectionList({
   warnings,
   tileActions,
   sectionActions,
+  reorder,
 }: SectionListProps) {
   const { t } = useI18n()
+  // Las secciones de identidad en pantalla, para saber si una puede subir o bajar sin cruzar la identidad propia.
+  const identitySections = view === 'identity' ? sections.filter((section) => section.identityId !== undefined) : []
 
   return (
     <div className="sections">
@@ -62,6 +81,30 @@ export function SectionList({
         }
         const menuItems: MenuItem[] = [add]
         if (identity !== undefined) {
+          const at = identitySections.findIndex((candidate) => candidate.identityId === identity.id)
+          const isOwn = (id: string | undefined): boolean => id === reorder?.ownIdentityId
+          const canStep = (delta: -1 | 1): boolean => {
+            const neighbour = identitySections[at + delta]?.identityId
+            return neighbour !== undefined && isOwn(neighbour) === isOwn(identity.id)
+          }
+          if (reorder !== undefined && canStep(-1)) {
+            menuItems.push({
+              key: 'move-up',
+              label: t('reorder.up'),
+              onSelect: () => {
+                reorder.actions.moveIdentity(identity, -1)
+              },
+            })
+          }
+          if (reorder !== undefined && canStep(1)) {
+            menuItems.push({
+              key: 'move-down',
+              label: t('reorder.down'),
+              onSelect: () => {
+                reorder.actions.moveIdentity(identity, 1)
+              },
+            })
+          }
           menuItems.push(
             {
               key: 'edit',
@@ -102,7 +145,26 @@ export function SectionList({
         const title = identity?.label ?? group?.name ?? t('section.ungrouped')
         const color = identity?.color ?? group?.color
         return (
-          <section key={section.key} className="section">
+          <section
+            key={section.key}
+            className={
+              identity !== undefined && reorder?.drag.overId === identity.id ? 'section section--over' : 'section'
+            }
+            onDragOver={
+              identity === undefined || reorder === undefined
+                ? undefined
+                : (event) => {
+                    reorder.actions.dragOver('identity', identity.id, event)
+                  }
+            }
+            onDrop={
+              identity === undefined || reorder === undefined
+                ? undefined
+                : (event) => {
+                    reorder.actions.drop('identity', identity.id, event)
+                  }
+            }
+          >
             <div
               className={color === undefined ? 'section__ribbon section__ribbon--neutral' : 'section__ribbon'}
               style={color === undefined ? undefined : { backgroundColor: color }}
@@ -116,6 +178,16 @@ export function SectionList({
                 {...(identity?.email === undefined ? {} : { subtitle: identity.email })}
                 {...(group === undefined ? {} : { icon: group.icon ?? FOLDER })}
                 {...(sectionDestination === undefined ? {} : { destination: sectionDestination })}
+                {...(identity === undefined || reorder === undefined
+                  ? {}
+                  : {
+                      dragProps: {
+                        onDragStart: (event) => {
+                          reorder.actions.dragStart('identity', identity.id, event)
+                        },
+                        onDragEnd: reorder.actions.dragEnd,
+                      },
+                    })}
               />
               {section.accounts.length === 0 ? (
                 <EmptyState
@@ -125,7 +197,7 @@ export function SectionList({
                 />
               ) : (
                 <ul className="grid">
-                  {section.accounts.map((account) => {
+                  {section.accounts.map((account, position) => {
                     const destination = index.destinations.get(account.id)
                     const showOwn =
                       showDestinations &&
@@ -143,6 +215,19 @@ export function SectionList({
                         destination={showOwn ? destination : undefined}
                         sharedWith={warnings.get(account.id) ?? NO_WARNINGS}
                         actions={tileActions}
+                        {...(reorder === undefined
+                          ? {}
+                          : {
+                              canMoveUp: sameBand(section.accounts[position - 1], account, reorder.bandOf),
+                              canMoveDown: sameBand(section.accounts[position + 1], account, reorder.bandOf),
+                              ...(reorder.drag.dragging?.kind !== 'account'
+                                ? {}
+                                : reorder.drag.dragging.id === account.id
+                                  ? { dragState: 'dragging' as const }
+                                  : reorder.drag.overId === account.id
+                                    ? { dragState: 'over' as const }
+                                    : {}),
+                            })}
                       />
                     )
                   })}

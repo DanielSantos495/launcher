@@ -10,6 +10,7 @@ import { parseIconIndex } from '../storage/icon-index'
 import { InstallationSchema } from '../storage/installation'
 import { LOCAL_KEYS, SESSION_KEYS } from '../storage/keys'
 import { jsonBytes } from '../storage/usage'
+import { SEEN_LIMIT } from './lib/new-profiles'
 
 export interface InstallationView {
   readonly installationId: string
@@ -25,6 +26,8 @@ export interface LauncherClient {
   installation(): Promise<InstallationView | undefined> // lee y valida LOCAL_KEYS.installation (InstallationSchema)
   backupBytes(): Promise<number> // bytes UTF-8 del JSON de LOCAL_KEYS.backup; 0 si no hay o no se puede leer
   imageBytes(): Promise<number> // bytes de las imágenes de storage.local (LOCAL_KEYS.iconIndex); 0 si no hay
+  seenProfiles(): Promise<string[] | undefined> // carpetas vistas (LOCAL_KEYS.seenProfiles); undefined si no hay o no valida
+  saveSeenProfiles(directories: readonly string[]): Promise<void> // las guarda; no rechaza
   subscribe(listener: () => void): () => void // storage.onChanged: localData, localBindings, installation, shared
 }
 
@@ -50,6 +53,12 @@ export function toUiResponse<R extends UiRequest>(raw: unknown): UiResponse<UiRe
 // Instalación guardada en storage.local, o undefined si falta o no valida. Nunca lee `pairing` (DC5).
 export function parseInstallation(raw: unknown): InstallationView | undefined {
   const parsed = v.safeParse(InstallationSchema, raw)
+  return parsed.success ? parsed.output : undefined
+}
+
+// Carpetas vistas guardadas, o undefined si faltan o no son una lista de textos con el tope (se tratan como primera vez).
+export function parseSeenProfiles(raw: unknown): string[] | undefined {
+  const parsed = v.safeParse(v.pipe(v.array(v.pipe(v.string(), v.maxLength(255))), v.maxLength(SEEN_LIMIT)), raw)
   return parsed.success ? parsed.output : undefined
 }
 

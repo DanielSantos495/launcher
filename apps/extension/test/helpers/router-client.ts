@@ -5,6 +5,7 @@ import {
   imagesSize,
   isRelevantChange,
   parseInstallation,
+  parseSeenProfiles,
   toUiResponse,
   type LauncherClient,
 } from '../../src/ui/client'
@@ -28,6 +29,12 @@ export function createRouterClient(testEnv: TestEnv): LauncherClient {
       const stored: Record<string, unknown> = {}
       for (const key of parseIconIndex(index) ?? []) stored[key] = await testEnv.local.get(key)
       return imagesSize(index, stored)
+    },
+    async seenProfiles() {
+      return parseSeenProfiles(await testEnv.local.get(LOCAL_KEYS.seenProfiles))
+    },
+    async saveSeenProfiles(directories) {
+      await testEnv.local.set({ [LOCAL_KEYS.seenProfiles]: [...directories] })
     },
     subscribe(listener) {
       const offLocal = testEnv.local.onChange((keys) => {

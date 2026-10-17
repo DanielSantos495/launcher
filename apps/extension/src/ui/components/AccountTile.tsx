@@ -1,5 +1,6 @@
 import type { Account, Identity, ServiceInfo } from '@account-launcher/core'
 import { memo, useId } from 'react'
+import type { ReorderActions } from '../state/useReorder'
 import type { Language } from '../../i18n/i18n'
 import { useI18n, type I18n } from '../i18n-context'
 import type { Destination } from '../lib/sections'
@@ -15,6 +16,8 @@ export interface AccountActions {
   readonly remove: (account: Account) => void
   // Solo si el contenedor temporal está disponible; sin él, el menú no ofrece la opción.
   readonly openTemporary?: (account: Account) => void
+  // Sin él las tarjetas no se reordenan (la vista Recientes).
+  readonly reorder?: ReorderActions
 }
 
 export interface AccountTileProps {
@@ -27,6 +30,11 @@ export interface AccountTileProps {
   readonly destination: Destination | undefined
   readonly sharedWith: readonly Account[]
   readonly actions: AccountActions
+  // Hay sitio para moverla en ese sentido (dentro de su banda); sin reorder no se usan.
+  readonly canMoveUp?: boolean
+  readonly canMoveDown?: boolean
+  // Se está arrastrando esta tarjeta, o el arrastre está encima de ella.
+  readonly dragState?: 'dragging' | 'over'
 }
 
 const MAX_NAMED = 3
@@ -60,7 +68,11 @@ export const AccountTile = memo(function AccountTile({
   destination,
   sharedWith,
   actions,
+  canMoveUp = false,
+  canMoveDown = false,
+  dragState,
 }: AccountTileProps) {
+  const { reorder } = actions
   const i18n = useI18n()
   const { t } = i18n
   const extraId = useId()
@@ -77,14 +89,47 @@ export const AccountTile = memo(function AccountTile({
     .join(' ')
 
   return (
-    <li className="tile">
+    <li
+      className={dragState === undefined ? 'tile' : `tile tile--${dragState}`}
+      data-account-id={account.id}
+      draggable={reorder !== undefined}
+      onDragStart={
+        reorder === undefined
+          ? undefined
+          : (event) => {
+              reorder.dragStart('account', account.id, event)
+            }
+      }
+      onDragOver={
+        reorder === undefined
+          ? undefined
+          : (event) => {
+              reorder.dragOver('account', account.id, event)
+            }
+      }
+      onDrop={
+        reorder === undefined
+          ? undefined
+          : (event) => {
+              reorder.drop('account', account.id, event)
+            }
+      }
+      onDragEnd={reorder === undefined ? undefined : reorder.dragEnd}
+    >
       <button
         type="button"
         className="tile__open"
         aria-labelledby={`${extraId}-label`}
         aria-describedby={describedBy === '' ? undefined : describedBy}
+        aria-keyshortcuts={reorder === undefined ? undefined : 'Alt+ArrowUp Alt+ArrowDown'}
         onClick={() => {
           actions.open(account)
+        }}
+        onKeyDown={(event) => {
+          // Alt+↑ / Alt+↓: mover la cuenta sin ratón (el cambio se anuncia en la región en vivo del dashboard).
+          if (reorder === undefined || !event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return
+          event.preventDefault()
+          reorder.moveAccount(account, event.key === 'ArrowUp' ? -1 : 1)
         }}
       >
         <Icon icon={account.icon} serviceIcon={service?.icon} />
@@ -118,6 +163,20 @@ export const AccountTile = memo(function AccountTile({
           onDelete={actions.remove}
           onOpenAs={actions.open}
           {...(actions.openTemporary === undefined ? {} : { onOpenTemporary: actions.openTemporary })}
+          {...(reorder !== undefined && canMoveUp
+            ? {
+                onMoveUp: (a: Account) => {
+                  reorder.moveAccount(a, -1)
+                },
+              }
+            : {})}
+          {...(reorder !== undefined && canMoveDown
+            ? {
+                onMoveDown: (a: Account) => {
+                  reorder.moveAccount(a, 1)
+                },
+              }
+            : {})}
         />
       </div>
       {identity === undefined ? null : (

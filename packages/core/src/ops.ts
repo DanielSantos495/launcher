@@ -2,10 +2,12 @@ import * as v from 'valibot'
 import { err, ok, type Result } from './result'
 import {
   AccountSchema,
+  boundedArray,
   CustomServiceSchema,
   GroupSchema,
   IdentitySchema,
   IdSchema,
+  LIMITS,
   notArray,
   parseLauncherData,
   SettingsSchema,
@@ -24,6 +26,10 @@ export const OpSchema = v.variant('type', [
   v.strictObject({ type: v.literal('account.put'), account: AccountSchema }),
   v.strictObject({ type: v.literal('account.delete'), id: IdSchema }),
   v.strictObject({ type: v.literal('account.touch'), id: IdSchema, at: TimestampSchema }),
+  // Reordenar: reescribe `order` con el índice de cada id en la lista (0, 1, 2…). Las entidades que no están en la
+  // lista no cambian. Un id repetido da `invalid`; uno inexistente, `not_found`.
+  v.strictObject({ type: v.literal('identity.reorder'), ids: boundedArray(IdSchema, LIMITS.identities) }),
+  v.strictObject({ type: v.literal('account.reorder'), ids: boundedArray(IdSchema, LIMITS.accounts) }),
   v.strictObject({ type: v.literal('customService.put'), service: CustomServiceSchema }),
   v.strictObject({ type: v.literal('customService.delete'), id: IdSchema }),
   v.strictObject({
@@ -61,6 +67,26 @@ function mergeSettings(current: Settings, patch: Partial<Settings>): Settings {
   }
 }
 
+// Asigna order = posición en `ids` a las entidades indicadas. not_found si falta alguna; invalid si hay repetidas.
+function reorder<T extends { readonly id: string; readonly order: number }>(
+  list: readonly T[],
+  ids: readonly string[],
+): Result<T[], StepError> {
+  const position = new Map<string, number>()
+  for (const [index, id] of ids.entries()) {
+    if (position.has(id)) return err({ code: 'invalid' })
+    position.set(id, index)
+  }
+  const known = new Set(list.map((item) => item.id))
+  if (ids.some((id) => !known.has(id))) return err({ code: 'not_found' })
+  return ok(
+    list.map((item) => {
+      const order = position.get(item.id)
+      return order === undefined ? item : { ...item, order }
+    }),
+  )
+}
+
 function applyOp(d: LauncherData, op: Op): Result<LauncherData, StepError> {
   switch (op.type) {
     case 'identity.put':
@@ -86,6 +112,14 @@ function applyOp(d: LauncherData, op: Op): Result<LauncherData, StepError> {
     case 'account.touch':
       if (!d.accounts.some((a) => a.id === op.id)) return err({ code: 'not_found' })
       return ok({ ...d, accounts: d.accounts.map((a) => (a.id === op.id ? { ...a, lastOpenedAt: op.at } : a)) })
+    case 'identity.reorder': {
+      const identities = reorder(d.identities, op.ids)
+      return identities.ok ? ok({ ...d, identities: identities.value }) : identities
+    }
+    case 'account.reorder': {
+      const accounts = reorder(d.accounts, op.ids)
+      return accounts.ok ? ok({ ...d, accounts: accounts.value }) : accounts
+    }
     case 'customService.put':
       return ok({ ...d, customServices: upsert(d.customServices, op.service) })
     case 'customService.delete':

@@ -26,11 +26,13 @@ interface SettingsViewProps {
   readonly download: (filename: string, text: string) => void
   readonly notify: (key: MessageKey) => void
   readonly onBack: () => void
+  // Abierta desde el aviso de un perfil nuevo: el foco empieza en Vínculos y no en el título.
+  readonly focusBindings?: boolean
 }
 
 // Pantalla de Configuración. Cada ajuste se guarda con su propio settings.set; el estado que se muestra es siempre el
 // que devuelve el service worker.
-export function SettingsView({ launcher, data, download, notify, onBack }: SettingsViewProps) {
+export function SettingsView({ launcher, data, download, notify, onBack, focusBindings = false }: SettingsViewProps) {
   const { t, language } = useI18n()
   const { state, mutate, send, reload } = launcher
   const [error, setError] = useState<UiError | undefined>()
@@ -41,8 +43,10 @@ export function SettingsView({ launcher, data, download, notify, onBack }: Setti
 
   // Al abrir la pantalla, el teclado y los lectores empiezan por su título.
   useEffect(() => {
-    headingRef.current?.focus()
-  }, [])
+    const bindings = focusBindings ? document.getElementById(BINDINGS_SECTION_ID) : null
+    const first = bindings ?? headingRef.current
+    first?.focus()
+  }, [focusBindings])
 
   const change = async (patch: Partial<Settings>): Promise<void> => {
     const response = await mutate([{ type: 'settings.set', settings: patch }])

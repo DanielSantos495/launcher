@@ -1,10 +1,12 @@
-import type { Account, Identity, Op } from '@account-launcher/core'
+import { recentAccounts, type Account, type Identity, type Op } from '@account-launcher/core'
 import type { UiError } from '@account-launcher/protocol'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MessageKey } from '../../i18n/i18n'
 import { useClock } from '../clock-context'
 import { useI18n } from '../i18n-context'
 import { isStoreFull, loadProblem } from '../lib/data-problem'
+import { accountBand, useReorder } from '../state/useReorder'
+import { useNewProfiles } from '../state/useNewProfiles'
 import { boardIndex, orderedIdentities, viewSections, warningsIndex } from '../lib/sections'
 import type { Launcher } from '../state/useLauncher'
 import { usePaletteShortcut } from '../state/usePaletteShortcut'
@@ -14,8 +16,10 @@ import { DashboardDialogs, type DialogState } from './DashboardDialogs'
 import { EmptyState } from './EmptyState'
 import { ErrorBanner } from './ErrorBanner'
 import { Header } from './Header'
-import { SectionList, type SectionActions } from './SectionList'
+import { RecentList } from './RecentList'
+import { SectionList, type ReorderView, type SectionActions } from './SectionList'
 import { DataProblemBanner } from './multi/DataProblemBanner'
+import { NewProfileNotices } from './multi/NewProfileNotices'
 import { SettingsView } from './SettingsView'
 import { Toasts, type ToastItem } from './Toasts'
 
@@ -33,14 +37,16 @@ interface DashboardProps {
 export function Dashboard({ launcher, download }: DashboardProps) {
   const { t } = useI18n()
   const now = useClock()
-  const { state, mutate, send, reload } = launcher
+  const { state, mutate, send, reload, client } = launcher
   const { data, bindings, profiles } = state
   const [dialog, setDialog] = useState<DialogState | undefined>(undefined)
   // Error de la última acción (abrir, favorita, cambiar de vista); los de los formularios salen dentro del diálogo.
   const [notice, setNotice] = useState<UiError | undefined>(undefined)
   const [toasts, setToasts] = useState<readonly ToastItem[]>([])
   const toastCounter = useRef(0)
-  const [screen, setScreen] = useState<'board' | 'settings'>('board')
+  const [screen, setScreen] = useState<'board' | 'recent' | 'settings'>('board')
+  // Configuración abierta desde el aviso de un perfil nuevo: empieza en Vínculos.
+  const [settingsAt, setSettingsAt] = useState<'top' | 'bindings'>('top')
   const [paletteOpen, setPaletteOpen] = useState(false)
   const mainRef = useRef<HTMLElement>(null)
   const previousScreen = useRef(screen)
@@ -53,11 +59,15 @@ export function Dashboard({ launcher, download }: DashboardProps) {
       (provider) => provider.id === 'brave-temporary-container' && provider.available,
     ) === true
   const view = data?.settings.defaultView ?? 'identity'
+  // Los perfiles nuevos solo importan en Varios perfiles con el programa disponible.
+  const multiWithHost = data?.settings.mode === 'multi' && state.capabilities?.host.available === true
+  const newProfiles = useNewProfiles(client, multiWithHost, profiles, bindings)
 
   const sections = useMemo(
     () => (data === undefined ? [] : viewSections(data, view, ownIdentityId)),
     [data, view, ownIdentityId],
   )
+  const recent = useMemo(() => (data === undefined ? [] : recentAccounts(data)), [data])
   const index = useMemo(
     () => (data === undefined ? undefined : boardIndex(data, bindings, profiles)),
     [data, bindings, profiles],
@@ -66,6 +76,25 @@ export function Dashboard({ launcher, download }: DashboardProps) {
   const identities = useMemo(
     () => (data === undefined ? [] : orderedIdentities(data, ownIdentityId)),
     [data, ownIdentityId],
+  )
+
+  const reorder = useReorder({
+    sections,
+    view,
+    identities,
+    ownIdentityId,
+    mutate,
+    onError: setNotice,
+    t,
+  })
+  const reorderView = useMemo<ReorderView>(
+    () => ({
+      actions: reorder.actions,
+      drag: reorder.drag,
+      bandOf: (account) => accountBand(account, view, ownIdentityId),
+      ownIdentityId,
+    }),
+    [reorder.actions, reorder.drag, view, ownIdentityId],
   )
 
   const notify = useCallback(
@@ -159,6 +188,11 @@ export function Dashboard({ launcher, download }: DashboardProps) {
     }),
     [openAccount, mutateWithNotice, temporaryAvailable, now],
   )
+  // Las tarjetas de Recientes no se reordenan: mismas acciones, sin las de mover.
+  const tileActionsWithReorder = useMemo<AccountActions>(
+    () => ({ ...tileActions, reorder: reorder.actions }),
+    [tileActions, reorder.actions],
+  )
   const sectionActions = useMemo<SectionActions>(
     () => ({
       addAccount: (target) => {
@@ -245,8 +279,9 @@ export function Dashboard({ launcher, download }: DashboardProps) {
         // "Abrir como…" solo tiene sentido en Varios perfiles; en Perfil único equivaldría a un clic normal.
         identities={data.settings.mode === 'multi' ? identities : NO_IDENTITIES}
         warnings={warnings}
-        tileActions={tileActions}
+        tileActions={tileActionsWithReorder}
         sectionActions={sectionActions}
+        reorder={reorderView}
       />
     )
   }
@@ -272,8 +307,13 @@ export function Dashboard({ launcher, download }: DashboardProps) {
               },
             }
           : {})}
+        recentOpen={screen === 'recent'}
+        onRecent={() => {
+          setScreen((current) => (current === 'recent' ? 'board' : 'recent'))
+        }}
         onSearch={openPalette}
         onSettings={() => {
+          setSettingsAt('top')
           setScreen((current) => (current === 'settings' ? 'board' : 'settings'))
         }}
       />
@@ -303,14 +343,34 @@ export function Dashboard({ launcher, download }: DashboardProps) {
             data={data}
             download={download}
             notify={notify}
+            focusBindings={settingsAt === 'bindings'}
             onBack={() => {
               setScreen('board')
             }}
           />
         ) : (
           <>
-            {body}
-            {hasIdentities ? (
+            {multiWithHost ? (
+              <NewProfileNotices
+                profiles={newProfiles.fresh}
+                onDismiss={newProfiles.dismiss}
+                onLink={() => {
+                  setSettingsAt('bindings')
+                  setScreen('settings')
+                }}
+              />
+            ) : null}
+            {screen === 'recent' ? (
+              <RecentList
+                accounts={recent}
+                index={index}
+                identities={data.settings.mode === 'multi' ? identities : NO_IDENTITIES}
+                tileActions={tileActions}
+              />
+            ) : (
+              body
+            )}
+            {hasIdentities && screen === 'board' ? (
               <div className="board-actions">
                 <button
                   type="button"
@@ -361,6 +421,9 @@ export function Dashboard({ launcher, download }: DashboardProps) {
         />
       ) : null}
       <Toasts toasts={toasts} onDismiss={dismissToast} />
+      <div className="visually-hidden" role="status" aria-live="polite">
+        {reorder.announcement}
+      </div>
     </>
   )
 }

@@ -1,4 +1,5 @@
 import type { IconRef } from '@account-launcher/core'
+import type { DragEventHandler } from 'react'
 import { useI18n } from '../i18n-context'
 import type { Destination } from '../lib/sections'
 import { DestinationLabel } from './DestinationLabel'
@@ -13,13 +14,15 @@ interface SectionHeaderProps {
   readonly icon?: IconRef
   readonly destination?: Destination
   readonly menuItems: readonly MenuItem[]
+  // Con él, la cabecera se arrastra para reordenar la sección.
+  readonly dragProps?: { readonly onDragStart: DragEventHandler<HTMLDivElement>; readonly onDragEnd: () => void }
 }
 
 // Cabecera de una sección: nombre, email, número de cuentas, destino (en Varios perfiles) y menú de acciones.
-export function SectionHeader({ title, subtitle, count, icon, destination, menuItems }: SectionHeaderProps) {
+export function SectionHeader({ title, subtitle, count, icon, destination, menuItems, dragProps }: SectionHeaderProps) {
   const { t, tp } = useI18n()
   return (
-    <div className="section__header">
+    <div className="section__header" draggable={dragProps !== undefined} {...dragProps}>
       <div className="section__title">
         {icon === undefined ? null : <Icon icon={icon} size={22} />}
         <h2 className="section__name">{title}</h2>

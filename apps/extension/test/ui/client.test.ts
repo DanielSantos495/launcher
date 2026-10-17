@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { jsonBytes } from '../../src/storage/usage'
-import { backupSize, imagesSize, isRelevantChange, parseInstallation, toUiResponse } from '../../src/ui/client'
+import {
+  backupSize,
+  imagesSize,
+  isRelevantChange,
+  parseInstallation,
+  parseSeenProfiles,
+  toUiResponse,
+} from '../../src/ui/client'
 
 describe('toUiResponse', () => {
   it('deja pasar una respuesta correcta con su resultado', () => {
@@ -92,5 +99,23 @@ describe('imagesSize', () => {
     expect(imagesSize(['icon:a', 'icon:b'], { 'icon:a': a })).toBe(jsonBytes(a))
     expect(imagesSize(undefined, { 'icon:a': a })).toBe(0)
     expect(imagesSize('basura', {})).toBe(0)
+  })
+})
+
+describe('parseSeenProfiles', () => {
+  it('acepta una lista de textos y rechaza lo demás', () => {
+    expect(parseSeenProfiles(['Default', 'Profile 1'])).toEqual(['Default', 'Profile 1'])
+    expect(parseSeenProfiles(undefined)).toBeUndefined()
+    expect(parseSeenProfiles('Default')).toBeUndefined()
+    expect(parseSeenProfiles(['Default', 3])).toBeUndefined()
+    expect(parseSeenProfiles({ 0: 'Default' })).toBeUndefined()
+  })
+
+  it('el tope es 200 elementos y 255 caracteres por carpeta (máximo y máximo + 1)', () => {
+    const list = (n: number) => Array.from({ length: n }, (_, i) => `p${String(i)}`)
+    expect(parseSeenProfiles(list(200))).toHaveLength(200)
+    expect(parseSeenProfiles(list(201))).toBeUndefined()
+    expect(parseSeenProfiles(['x'.repeat(255)])).toHaveLength(1)
+    expect(parseSeenProfiles(['x'.repeat(256)])).toBeUndefined()
   })
 })

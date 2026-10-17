@@ -9,6 +9,9 @@ interface HeaderProps {
   // Sin manejador el botón queda deshabilitado (y sin atajo anunciado).
   readonly onSearch?: () => void
   readonly onSettings?: () => void
+  // Vista "Recientes": se anuncia como pulsada mientras está abierta.
+  readonly onRecent?: () => void
+  readonly recentOpen?: boolean
   // Configuración abierta: el botón se anuncia como pulsado.
   readonly settingsOpen?: boolean
   // Solo con el contenedor temporal disponible: abre el diálogo de "URL aislada".
@@ -24,6 +27,8 @@ export function Header({
   canAddAccount,
   onSearch,
   onSettings,
+  onRecent,
+  recentOpen,
   settingsOpen,
   onOpenIsolatedUrl,
 }: HeaderProps) {
@@ -48,7 +53,7 @@ export function Header({
               key={option}
               type="button"
               className="segmented__option"
-              aria-pressed={view === option}
+              aria-pressed={view === option && recentOpen !== true}
               onClick={() => {
                 if (view !== option) onViewChange(option)
               }}
@@ -57,6 +62,15 @@ export function Header({
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          className="button"
+          aria-pressed={recentOpen}
+          disabled={onRecent === undefined}
+          onClick={onRecent}
+        >
+          {t('header.recent')}
+        </button>
         <div className="app-header__end">
           <button type="button" className="button button--primary" disabled={!canAddAccount} onClick={onAddAccount}>
             {t('header.addAccount')}

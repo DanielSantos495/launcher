@@ -11,9 +11,21 @@ interface AccountMenuProps {
   readonly onOpenAs: (account: Account, identityId: string) => void
   // Solo con el proveedor de contenedor temporal disponible (Brave con el programa instalado).
   readonly onOpenTemporary?: (account: Account) => void
+  // Mover dentro de su sección: solo se ofrece el sentido en que hay sitio.
+  readonly onMoveUp?: (account: Account) => void
+  readonly onMoveDown?: (account: Account) => void
 }
 
-export function AccountMenu({ account, identities, onEdit, onDelete, onOpenAs, onOpenTemporary }: AccountMenuProps) {
+export function AccountMenu({
+  account,
+  identities,
+  onEdit,
+  onDelete,
+  onOpenAs,
+  onOpenTemporary,
+  onMoveUp,
+  onMoveDown,
+}: AccountMenuProps) {
   const { t } = useI18n()
   const items: MenuItem[] = [
     {
@@ -23,6 +35,28 @@ export function AccountMenu({ account, identities, onEdit, onDelete, onOpenAs, o
         onEdit(account)
       },
     },
+    ...(onMoveUp === undefined
+      ? []
+      : [
+          {
+            key: 'move-up',
+            label: t('reorder.up'),
+            onSelect: () => {
+              onMoveUp(account)
+            },
+          },
+        ]),
+    ...(onMoveDown === undefined
+      ? []
+      : [
+          {
+            key: 'move-down',
+            label: t('reorder.down'),
+            onSelect: () => {
+              onMoveDown(account)
+            },
+          },
+        ]),
     ...identities
       .filter((identity) => identity.id !== account.identityId)
       .map((identity): MenuItem => ({
