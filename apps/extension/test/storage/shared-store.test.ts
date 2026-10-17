@@ -17,6 +17,7 @@ import { createSharedStore, type SharedStore } from '../../src/storage/shared-st
 import { jsonBytes } from '../../src/storage/usage'
 import { dataOfBytes } from '../helpers/data-of-bytes'
 import { createTestEnv, DEFAULT_NOW, type TestEnv } from '../helpers/env'
+import { pngImage } from '../helpers/images'
 import { createFakeHost, type FakeHost } from '../helpers/fake-host'
 import {
   AT,
@@ -92,6 +93,92 @@ function applying(list: readonly Op[], spy?: () => void) {
 function snapshotOf(data: LauncherData, bindings: Bindings = {}): Snapshot {
   return { data, bindings }
 }
+
+describe('SharedStore.refresh: imágenes locales al sembrar', () => {
+  const imageAccount = (id: string, key: string) => ({
+    id,
+    identityId: 'ana',
+    groupId: null,
+    serviceId: 'github',
+    label: id,
+    icon: { type: 'image' as const, key },
+    favorite: false,
+    order: 0,
+    createdAt: AT,
+    updatedAt: AT,
+  })
+
+  // Siembra con tantas imágenes locales como claves se pasan (todas referenciadas por una cuenta).
+  function seeded(keys: readonly string[], options: { maxIcons?: number; missing?: readonly string[] } = {}) {
+    const fake = createFakeHost(options.maxIcons === undefined ? {} : { maxIcons: options.maxIcons })
+    current = fake
+    registerInstallation(fake, 'inst-a', TOKEN_A)
+    fake.state.store = { revision: 0, data: null, bindings: {} }
+    const data = {
+      ...dataWith('multi', ['ana']),
+      accounts: keys.map((key, i) => imageAccount(`a${String(i)}`, key)),
+    }
+    const stored = keys.filter((key) => !(options.missing ?? []).includes(key))
+    const t = createTestEnv({
+      host: fake,
+      local: {
+        ...unpairedLocal('inst-a', data),
+        iconIndex: stored,
+        ...Object.fromEntries(stored.map((key) => [key, pngImage(24)])),
+      },
+    })
+    if (t.env.host === undefined) throw new Error('el entorno de prueba debería tener host')
+    const store = createSharedStore({
+      deps: t.deps,
+      host: t.env.host,
+      token: TOKEN_A,
+      local: createLocalStore(t.deps),
+      onNotPaired: () => Promise.resolve(),
+    })
+    return { fake, t, store }
+  }
+
+  it('copia al host las imágenes referenciadas y borra las copias locales', async () => {
+    const { fake, t, store } = seeded(['icon:a', 'icon:b'])
+    expect((await store.refresh()).ok).toBe(true)
+    expect([...fake.state.icons.keys()]).toEqual(['icon:a', 'icon:b'])
+    expect(fake.state.icons.get('icon:a')).toEqual(pngImage(24))
+    expect(t.local.dump()['icon:a']).toBeUndefined()
+    expect(t.local.dump()['icon:b']).toBeUndefined()
+    expect(t.local.dump().iconIndex).toEqual([])
+  })
+
+  it('un fallo no deshace la siembra: la imagen que falló sigue en local y las demás se mueven', async () => {
+    const { fake, t, store } = seeded(['icon:a', 'icon:b', 'icon:c'], { missing: ['icon:c'] })
+    fake.override = ({ cmd, args }) =>
+      cmd === 'icons.put' && args.key === 'icon:a' ? { ok: false, error: { code: 'too_large' } } : undefined
+    expect((await store.refresh()).ok).toBe(true)
+    expect(fake.state.store?.revision).toBe(1)
+    expect([...fake.state.icons.keys()]).toEqual(['icon:b'])
+    expect(t.local.dump()['icon:a']).toEqual(pngImage(24))
+    expect(t.local.dump()['icon:b']).toBeUndefined()
+    expect(t.local.dump().iconIndex).toEqual(['icon:a'])
+  })
+
+  it('con limit_reached se para: no intenta las siguientes y todo lo no copiado sigue en local', async () => {
+    const { fake, t, store } = seeded(['icon:a', 'icon:b', 'icon:c'], { maxIcons: 1 })
+    expect((await store.refresh()).ok).toBe(true)
+    expect([...fake.state.icons.keys()]).toEqual(['icon:a'])
+    expect(requestsOf(fake, 'icons.put')).toBe(2)
+    expect(t.local.dump()['icon:a']).toBeUndefined()
+    expect(t.local.dump()['icon:b']).toEqual(pngImage(24))
+    expect(t.local.dump()['icon:c']).toEqual(pngImage(24))
+    expect(t.local.dump().iconIndex).toEqual(['icon:b', 'icon:c'])
+  })
+
+  it('si la siembra de los datos falla, no se copia ninguna imagen', async () => {
+    const { fake, t, store } = seeded(['icon:a'])
+    fake.override = ({ cmd }) => (cmd === 'sync.put' ? { ok: false, error: { code: 'too_large' } } : undefined)
+    expect((await store.refresh()).ok).toBe(false)
+    expect(requestsOf(fake, 'icons.put')).toBe(0)
+    expect(t.local.dump()['icon:a']).toEqual(pngImage(24))
+  })
+})
 
 describe('SharedStore.refresh', () => {
   it('con el almacén recién creado (data null) siembra con los datos locales', async () => {

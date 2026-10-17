@@ -1,6 +1,14 @@
 import { browser } from 'wxt/browser'
+import { parseIconIndex } from '../storage/icon-index'
 import { LOCAL_KEYS } from '../storage/keys'
-import { backupSize, isRelevantChange, parseInstallation, toUiResponse, type LauncherClient } from '../ui/client'
+import {
+  backupSize,
+  imagesSize,
+  isRelevantChange,
+  parseInstallation,
+  toUiResponse,
+  type LauncherClient,
+} from '../ui/client'
 
 // Cliente del dashboard sobre la API del navegador. Es el único sitio que une la UI con wxt/browser.
 export function createBrowserClient(): LauncherClient {
@@ -28,6 +36,15 @@ export function createBrowserClient(): LauncherClient {
       try {
         const stored = await browser.storage.local.get(LOCAL_KEYS.backup)
         return backupSize(Object.hasOwn(stored, LOCAL_KEYS.backup) ? stored[LOCAL_KEYS.backup] : undefined)
+      } catch {
+        return 0
+      }
+    },
+    async imageBytes() {
+      try {
+        const index = (await browser.storage.local.get(LOCAL_KEYS.iconIndex))[LOCAL_KEYS.iconIndex]
+        const keys = parseIconIndex(index) ?? []
+        return imagesSize(index, keys.length === 0 ? {} : await browser.storage.local.get(keys))
       } catch {
         return 0
       }

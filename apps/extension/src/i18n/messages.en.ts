@@ -87,7 +87,7 @@ export const en: Record<MessageKey, string> = {
   'account.icon.hint': 'Replaces the service icon.',
   'account.image': 'Image (optional)',
   'account.image.hint':
-    'PNG, JPEG or WebP up to 32 KiB; replaces the icon. Stored in this browser (or in the launcher program if paired). It is not part of the exported backup: after importing, the automatic icon is used.',
+    'PNG, JPEG or WebP up to 32 KiB; replaces the icon. Stored in this browser (or in the launcher program if paired). It is not part of the exported backup: after importing, the automatic icon is used. When you go back to "Single profile", the images of the shared list are not shown (the automatic icon is used).',
   'account.image.remove': 'Remove image',
   'account.image.preview': 'Preview of the chosen image',
   'account.image.invalid': 'The image is not valid. Use a PNG, JPEG or WebP.',
@@ -406,6 +406,7 @@ export const en: Record<MessageKey, string> = {
   'hint.shared_bindings_full': 'The shared links take up too much space.',
   'hint.already_paired': 'This profile is already paired.',
   'hint.import_invalid': 'The file cannot be imported as it is.',
-  'hint.icon_limit': 'The maximum number of stored images (2500) was reached. Remove the image from an account.',
+  'hint.icon_limit':
+    'The maximum number of stored images (100 in this browser, 2500 in the launcher program) was reached. Remove the image from an account.',
   'hint.icon_too_large': 'The image is too large (32 KiB maximum).',
 }

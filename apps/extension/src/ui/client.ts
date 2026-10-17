@@ -6,6 +6,7 @@ import {
   type UiResults,
 } from '@account-launcher/protocol'
 import * as v from 'valibot'
+import { parseIconIndex } from '../storage/icon-index'
 import { InstallationSchema } from '../storage/installation'
 import { LOCAL_KEYS, SESSION_KEYS } from '../storage/keys'
 import { jsonBytes } from '../storage/usage'
@@ -23,6 +24,7 @@ export interface LauncherClient {
   send<R extends UiRequest>(request: R): Promise<UiResponse<UiResults[R['type']]>>
   installation(): Promise<InstallationView | undefined> // lee y valida LOCAL_KEYS.installation (InstallationSchema)
   backupBytes(): Promise<number> // bytes UTF-8 del JSON de LOCAL_KEYS.backup; 0 si no hay o no se puede leer
+  imageBytes(): Promise<number> // bytes de las imágenes de storage.local (LOCAL_KEYS.iconIndex); 0 si no hay
   subscribe(listener: () => void): () => void // storage.onChanged: localData, localBindings, installation, shared
 }
 
@@ -56,9 +58,24 @@ export function backupSize(raw: unknown): number {
   return raw === undefined ? 0 : jsonBytes(raw)
 }
 
+// Bytes de las imágenes del índice que hay en `stored` (las que faltan no cuentan); 0 si el índice no es válido.
+export function imagesSize(index: unknown, stored: Readonly<Record<string, unknown>>): number {
+  let bytes = 0
+  for (const key of parseIconIndex(index) ?? []) {
+    if (Object.hasOwn(stored, key)) bytes += jsonBytes(stored[key])
+  }
+  return bytes
+}
+
 // Claves de storage cuyo cambio puede alterar lo que muestra el dashboard.
 const WATCHED: Readonly<Record<'local' | 'session', ReadonlySet<string>>> = {
-  local: new Set([LOCAL_KEYS.localData, LOCAL_KEYS.localBindings, LOCAL_KEYS.installation, LOCAL_KEYS.backup]),
+  local: new Set([
+    LOCAL_KEYS.localData,
+    LOCAL_KEYS.localBindings,
+    LOCAL_KEYS.installation,
+    LOCAL_KEYS.backup,
+    LOCAL_KEYS.iconIndex,
+  ]),
   session: new Set([SESSION_KEYS.shared]),
 }
 

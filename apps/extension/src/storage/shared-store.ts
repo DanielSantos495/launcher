@@ -9,13 +9,19 @@ import {
   type LauncherData,
   type Result,
 } from '@account-launcher/core'
-import { MAX_SHARED_BINDINGS_BYTES, MAX_SHARED_DATA_BYTES, type UiError } from '@account-launcher/protocol'
+import {
+  IconImageSchema,
+  MAX_SHARED_BINDINGS_BYTES,
+  MAX_SHARED_DATA_BYTES,
+  type UiError,
+} from '@account-launcher/protocol'
 import * as v from 'valibot'
 import type { SwDeps } from '../background/deps'
 import { uiError } from '../background/hints'
 import { toUiError, type HostCallError, type HostClient } from '../background/host-client'
 import type { DataStore, Snapshot, WriteOutcome } from './data-store'
 import { SESSION_KEYS } from './keys'
+import { imageKeys, removeLocalImages } from './icon-index'
 import { jsonBytes } from './usage'
 
 // Intentos de una escritura cuando otra instalación se adelanta (conflict): la primera base sale de la caché y las
@@ -89,6 +95,29 @@ export function createSharedStore(env: {
     return err(toUiError(error))
   }
 
+  // Tras sembrar, las imágenes locales que los datos referencian se copian al host (icons.put), una a una y de mejor
+  // esfuerzo: un fallo no deshace la siembra y deja esa imagen en local; limit_reached (o not_paired) detiene la copia.
+  // Solo las copiadas se borran de storage.local. Va en la cola del llamante, igual que la siembra.
+  async function migrateImages(data: LauncherData): Promise<void> {
+    const copied: string[] = []
+    try {
+      for (const key of imageKeys(data)) {
+        const image = v.safeParse(IconImageSchema, await deps.local.get(key))
+        if (!image.success) continue
+        const put = await host.call('icons.put', { token, key, mime: image.output.mime, base64: image.output.base64 })
+        if (put.ok) {
+          copied.push(key)
+          continue
+        }
+        if (put.error.code === 'not_paired') await onNotPaired()
+        if (put.error.code === 'limit_reached' || put.error.code === 'not_paired') break
+      }
+      await removeLocalImages(deps, data, copied)
+    } catch {
+      // Mejor esfuerzo: lo que no se pudo borrar solo ocupa sitio en local.
+    }
+  }
+
   // El almacén recién creado no tiene datos: se siembra con los locales. Si otra instalación sembró antes (conflict)
   // se vuelve a leer una sola vez.
   async function seed(baseRevision: number, mayRetry: boolean): Promise<Result<SharedCache, UiError>> {
@@ -103,6 +132,7 @@ export function createSharedStore(env: {
     if (put.ok) {
       const cache = cacheOf(put.value.revision, snapshot.value)
       await writeCache(cache)
+      await migrateImages(snapshot.value.data)
       return ok(cache)
     }
     if (put.error.code === 'conflict') return mayRetry ? fetchFromHost(false) : err(uiError('conflict'))

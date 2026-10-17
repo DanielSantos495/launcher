@@ -86,7 +86,7 @@ export const es = {
   'account.icon.hint': 'Sustituye al icono del servicio.',
   'account.image': 'Imagen (opcional)',
   'account.image.hint':
-    'PNG, JPEG o WebP de hasta 32 KiB; sustituye al icono. Se guarda en este navegador (o en el programa del launcher si estás emparejado). No va en la copia exportada: tras importar se usa el icono automático.',
+    'PNG, JPEG o WebP de hasta 32 KiB; sustituye al icono. Se guarda en este navegador (o en el programa del launcher si estás emparejado). No va en la copia exportada: tras importar se usa el icono automático. Al volver a «Perfil único», las imágenes de la lista compartida no se ven (se usa el icono automático).',
   'account.image.remove': 'Quitar imagen',
   'account.image.preview': 'Vista previa de la imagen elegida',
   'account.image.invalid': 'La imagen no es válida. Usa un PNG, JPEG o WebP.',
@@ -411,6 +411,7 @@ export const es = {
   'hint.shared_bindings_full': 'Los vínculos compartidos ocupan demasiado.',
   'hint.already_paired': 'Este perfil ya está emparejado.',
   'hint.import_invalid': 'El archivo no se puede importar tal cual.',
-  'hint.icon_limit': 'Se alcanzó el máximo de imágenes guardadas (2500). Quita la imagen de alguna cuenta.',
+  'hint.icon_limit':
+    'Se alcanzó el máximo de imágenes guardadas (100 en este navegador, 2500 en el programa del launcher). Quita la imagen de alguna cuenta.',
   'hint.icon_too_large': 'La imagen es demasiado grande (máximo 32 KiB).',
 } as const satisfies Record<string, string>

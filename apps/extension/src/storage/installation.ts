@@ -2,6 +2,7 @@ import { IdSchema, ProfileDirectorySchema } from '@account-launcher/core'
 import { TokenSchema } from '@account-launcher/protocol'
 import * as v from 'valibot'
 import type { SwDeps } from '../background/deps'
+import { iconCacheOf } from '../background/icon-cache'
 import { LOCAL_KEYS, SESSION_KEYS } from './keys'
 
 export interface Installation {
@@ -52,6 +53,8 @@ export async function clearPairing(deps: SwDeps, installation: Installation): Pr
   const unpaired: Installation = { ...installation, paired: false }
   await deps.local.set({ [LOCAL_KEYS.installation]: unpaired })
   await deps.session.remove([SESSION_KEYS.shared])
+  // Las imágenes cacheadas eran de ese token: se descartan con el índice de la caché.
+  await iconCacheOf(deps.session).clear()
   return unpaired
 }
 

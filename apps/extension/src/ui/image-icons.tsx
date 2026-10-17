@@ -25,8 +25,9 @@ export function createImageLoader(send: Send): ImageLoader {
             const image = v.safeParse(IconImageSchema, response.result)
             return image.success ? image.output : undefined
           }
-          // Solo "no existe" es definitivo (p. ej. tras importar): un fallo pasajero se vuelve a intentar.
-          if (response.error.code !== 'not_found') cache.delete(key)
+          // "No existe" (p. ej. tras importar) y "clave inválida" son definitivos: repetir la petición daría lo mismo.
+          // Un fallo pasajero se vuelve a intentar.
+          if (response.error.code !== 'not_found' && response.error.code !== 'invalid') cache.delete(key)
           return undefined
         },
         () => {

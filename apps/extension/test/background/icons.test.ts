@@ -8,6 +8,7 @@ import {
   registerInstallation,
   requestsOf,
   TOKEN_A,
+  TOKEN_B,
   unpairedLocal,
 } from '../helpers/shared-setup'
 
@@ -350,5 +351,179 @@ describe('borrado en cascada', () => {
       ],
     })
     expect(await t.route({ type: 'icon.get', key: KEY })).toEqual({ ok: false, error: { code: 'not_found' } })
+  })
+})
+
+describe('tope de imágenes en storage.local', () => {
+  const full = { ok: false, error: { code: 'limit_reached', hint: 'icon_limit' } }
+
+  async function fill(t: TestEnv, count: number): Promise<void> {
+    for (let i = 0; i < count; i++) expect((await t.route(put(`icon:k${String(i)}`, pngImage()))).ok).toBe(true)
+  }
+
+  it('caben 100 imágenes y la 101 responde limit_reached con la pista icon_limit', async () => {
+    const t = localEnv()
+    await fill(t, 100)
+    expect(await t.route(put('icon:k100', pngImage()))).toEqual(full)
+    expect(stored(t, 'icon:k100')).toBeUndefined()
+    expect(t.local.dump().iconIndex).toHaveLength(100)
+  })
+
+  it('reemplazar una clave que ya existe no suma al tope y borrar libera un hueco', async () => {
+    const t = localEnv()
+    await fill(t, 100)
+    expect((await t.route(put('icon:k5', pngImage(32)))).ok).toBe(true)
+    expect(await t.route(put('icon:otra', pngImage()))).toEqual(full)
+    expect((await t.route({ type: 'icon.delete', key: 'icon:k5' })).ok).toBe(true)
+    expect((await t.route(put('icon:otra', pngImage()))).ok).toBe(true)
+    expect(t.local.dump().iconIndex).toHaveLength(100)
+    expect(t.local.dump().iconIndex).not.toContain('icon:k5')
+  })
+
+  it('iconIndex se actualiza con la cascada y se reconstruye desde los datos si falta', async () => {
+    const data = {
+      ...dataWith('single', ['ana']),
+      accounts: [{ ...account('a1', undefined), icon: { type: 'image' as const, key: 'icon:r1' } }],
+    }
+    const t = createTestEnv({ local: { ...unpairedLocal('inst-a', data), 'icon:r1': pngImage() } })
+    expect(t.local.dump().iconIndex).toBeUndefined()
+    await t.route(put('icon:nueva', pngImage()))
+    expect(t.local.dump().iconIndex).toEqual(['icon:r1', 'icon:nueva'])
+    // Un índice dañado también se reconstruye.
+    await t.local.set({ iconIndex: 'basura' })
+    await t.route(put('icon:otra', pngImage()))
+    expect(t.local.dump().iconIndex).toEqual(['icon:r1', 'icon:otra'])
+    await t.route({ type: 'data.mutate', revision: 0, ops: [{ type: 'account.delete', id: 'a1' }] })
+    expect(t.local.dump().iconIndex).toEqual(['icon:otra'])
+    expect(stored(t, 'icon:r1')).toBeUndefined()
+  })
+
+  it('con el emparejamiento no se usa el tope local ni el índice', async () => {
+    const { t } = pairedEnv()
+    expect((await t.route(put(KEY, pngImage()))).ok).toBe(true)
+    expect(t.local.dump().iconIndex).toBeUndefined()
+  })
+})
+
+// Host que cuenta cuántas peticiones suyas están en vuelo a la vez.
+function countingHost(fake: FakeHost): { host: FakeHost; peak: () => number } {
+  let inFlight = 0
+  let peak = 0
+  const host = Object.assign(Object.create(fake) as FakeHost, {
+    send: async (name: string, message: object): Promise<unknown> => {
+      inFlight++
+      peak = Math.max(peak, inFlight)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      try {
+        return await fake.send(name, message)
+      } finally {
+        inFlight--
+      }
+    },
+  })
+  return { host, peak: () => peak }
+}
+
+describe('lectura de imágenes emparejado: concurrencia y caché de sesión', () => {
+  const keys = Array.from({ length: 10 }, (_, i) => `icon:g${String(i)}`)
+
+  function pairedWith(host?: (fake: FakeHost) => FakeHost): { t: TestEnv; fake: FakeHost; peak: () => number } {
+    const fake = createFakeHost()
+    registerInstallation(fake, 'inst-a', TOKEN_A)
+    fake.state.store = { revision: 1, data: dataWith('multi', ['ana']), bindings: {} }
+    for (const key of keys) fake.state.icons.set(key, pngImage())
+    const counting = countingHost(fake)
+    const t = createTestEnv({
+      host: host === undefined ? counting.host : host(fake),
+      local: pairedLocal('inst-a', TOKEN_A, dataWith('multi', ['ana'])),
+    })
+    return { t, fake, peak: counting.peak }
+  }
+
+  const getAll = (t: TestEnv) => Promise.all(keys.map((key) => t.route({ type: 'icon.get', key })))
+
+  it('con 10 claves a la vez hay como mucho 4 lecturas en vuelo (y más de una)', async () => {
+    const { t, peak } = pairedWith()
+    const responses = await getAll(t)
+    expect(responses.every((response) => response.ok)).toBe(true)
+    expect(peak()).toBe(4)
+  })
+
+  it('no espera a la cola de escritura', async () => {
+    const { t } = pairedWith()
+    let release: () => void = () => undefined
+    const blocked = t.env.queue.run(() => new Promise<void>((resolve) => (release = resolve)))
+    try {
+      expect((await t.route({ type: 'icon.get', key: keys[0] ?? KEY })).ok).toBe(true)
+    } finally {
+      release()
+      await blocked
+    }
+  })
+
+  it('una segunda carga sale de storage.session y no llama al host', async () => {
+    const { t, fake } = pairedWith()
+    await getAll(t)
+    expect(requestsOf(fake, 'icons.get')).toBe(10)
+    const again = await getAll(t)
+    expect(again.every((response) => response.ok)).toBe(true)
+    expect(requestsOf(fake, 'icons.get')).toBe(10)
+    // La sesión no guarda el token.
+    expect(JSON.stringify(t.session.dump())).not.toContain(TOKEN_A)
+  })
+
+  it('not_found del host es definitivo en la sesión', async () => {
+    const { t, fake } = pairedWith()
+    for (let i = 0; i < 3; i++) {
+      expect(await t.route({ type: 'icon.get', key: 'icon:falta' })).toEqual({
+        ok: false,
+        error: { code: 'not_found' },
+      })
+    }
+    expect(requestsOf(fake, 'icons.get')).toBe(1)
+  })
+
+  it('icon.delete e icon.put olvidan la caché de esa clave', async () => {
+    const { t, fake } = pairedWith()
+    await t.route({ type: 'icon.get', key: keys[0] ?? KEY })
+    await t.route({ type: 'icon.delete', key: keys[0] ?? KEY })
+    expect(await t.route({ type: 'icon.get', key: keys[0] ?? KEY })).toEqual({
+      ok: false,
+      error: { code: 'not_found' },
+    })
+    expect(requestsOf(fake, 'icons.get')).toBe(2)
+  })
+
+  it('cambiar de token descarta la caché', async () => {
+    const { t, fake } = pairedWith()
+    await t.route({ type: 'icon.get', key: keys[0] ?? KEY })
+    registerInstallation(fake, 'inst-a2', TOKEN_B)
+    await t.local.set({ pairing: { token: TOKEN_B } })
+    await t.route({ type: 'icon.get', key: keys[0] ?? KEY })
+    expect(requestsOf(fake, 'icons.get')).toBe(2)
+  })
+
+  it('cambiar de modo descarta la caché', async () => {
+    const { t, fake } = pairedWith()
+    await t.route({ type: 'icon.get', key: keys[0] ?? KEY })
+    await t.local.set({ localData: dataWith('single', ['ana']) })
+    expect(await t.route({ type: 'icon.get', key: keys[0] ?? KEY })).toEqual({
+      ok: false,
+      error: { code: 'not_found' },
+    })
+    await t.local.set({ localData: dataWith('multi', ['ana']) })
+    await t.route({ type: 'icon.get', key: keys[0] ?? KEY })
+    expect(requestsOf(fake, 'icons.get')).toBe(2)
+  })
+
+  it('not_paired en una lectura borra el emparejamiento', async () => {
+    const { t, fake } = pairedWith()
+    fake.state.installations.splice(0)
+    expect(await t.route({ type: 'icon.get', key: keys[0] ?? KEY })).toEqual({
+      ok: false,
+      error: { code: 'not_paired' },
+    })
+    expect(t.local.dump().installation).toEqual({ installationId: 'inst-a', paired: false })
+    expect(Object.keys(t.local.dump())).not.toContain('pairing')
   })
 })

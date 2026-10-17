@@ -1,5 +1,13 @@
 import { LOCAL_KEYS } from '../../src/storage/keys'
-import { backupSize, isRelevantChange, parseInstallation, toUiResponse, type LauncherClient } from '../../src/ui/client'
+import { parseIconIndex } from '../../src/storage/icon-index'
+import {
+  backupSize,
+  imagesSize,
+  isRelevantChange,
+  parseInstallation,
+  toUiResponse,
+  type LauncherClient,
+} from '../../src/ui/client'
 import type { TestEnv } from './env'
 
 // LauncherClient sobre el router real del service worker y el almacenamiento en memoria: lo que ve el dashboard en
@@ -14,6 +22,12 @@ export function createRouterClient(testEnv: TestEnv): LauncherClient {
     },
     async backupBytes() {
       return backupSize(await testEnv.local.get(LOCAL_KEYS.backup))
+    },
+    async imageBytes() {
+      const index = await testEnv.local.get(LOCAL_KEYS.iconIndex)
+      const stored: Record<string, unknown> = {}
+      for (const key of parseIconIndex(index) ?? []) stored[key] = await testEnv.local.get(key)
+      return imagesSize(index, stored)
     },
     subscribe(listener) {
       const offLocal = testEnv.local.onChange((keys) => {

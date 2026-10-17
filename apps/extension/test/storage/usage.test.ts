@@ -78,3 +78,11 @@ describe('storeUsage', () => {
     expect(storeUsage(dataOfBytes(Math.ceil(0.96 * LIMIT)), 'local').level).toBe('ok')
   })
 })
+
+describe('storeUsage con imágenes', () => {
+  it('en local suman las imágenes de storage.local y en el almacén compartido se ignoran', () => {
+    const data = createEmptyData()
+    expect(storeUsage(data, 'local', 1000, 500).bytes).toBe(jsonBytes(data) + 1500)
+    expect(storeUsage(data, 'shared', 1000, 500).bytes).toBe(jsonBytes(data))
+  })
+})

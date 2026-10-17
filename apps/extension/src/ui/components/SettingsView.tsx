@@ -211,7 +211,12 @@ export function SettingsView({ launcher, data, download, notify, onBack }: Setti
       </SettingsSection>
 
       <SettingsSection title={t('storage.title')}>
-        <StorageMeter data={data} source={state.source ?? 'local'} backupBytes={state.backupBytes ?? 0} />
+        <StorageMeter
+          data={data}
+          source={state.source ?? 'local'}
+          backupBytes={state.backupBytes ?? 0}
+          imageBytes={state.imageBytes ?? 0}
+        />
       </SettingsSection>
     </div>
   )

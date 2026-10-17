@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { backupSize, isRelevantChange, parseInstallation, toUiResponse } from '../../src/ui/client'
+import { jsonBytes } from '../../src/storage/usage'
+import { backupSize, imagesSize, isRelevantChange, parseInstallation, toUiResponse } from '../../src/ui/client'
 
 describe('toUiResponse', () => {
   it('deja pasar una respuesta correcta con su resultado', () => {
@@ -82,5 +83,14 @@ describe('backupSize', () => {
   it('sin copia son 0 bytes; con copia, los bytes UTF-8 de su JSON', () => {
     expect(backupSize(undefined)).toBe(0)
     expect(backupSize({ a: 'é' })).toBe(10)
+  })
+})
+
+describe('imagesSize', () => {
+  const a = { mime: 'image/png', base64: 'AAAA' }
+  it('suma los bytes de las imágenes del índice que existen; sin índice válido son 0', () => {
+    expect(imagesSize(['icon:a', 'icon:b'], { 'icon:a': a })).toBe(jsonBytes(a))
+    expect(imagesSize(undefined, { 'icon:a': a })).toBe(0)
+    expect(imagesSize('basura', {})).toBe(0)
   })
 })

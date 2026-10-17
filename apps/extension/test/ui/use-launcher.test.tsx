@@ -71,6 +71,7 @@ function createFake(options: FakeOptions = {}): Fake {
     },
     installation: () => Promise.resolve(INSTALLATION),
     backupBytes: () => Promise.resolve(0),
+    imageBytes: () => Promise.resolve(0),
     subscribe(listener) {
       listeners.add(listener)
       return () => {
