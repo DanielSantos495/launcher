@@ -88,7 +88,7 @@ export async function buildEncryptedExport(
 export function checkNewPassword(password: string, confirmation: string): 'length' | 'mismatch' | undefined {
   const length = passwordLength(password)
   if (length < PASSWORD_MIN || length > PASSWORD_MAX) return 'length'
-  return password === confirmation ? undefined : 'mismatch'
+  return password.normalize('NFC') === confirmation.normalize('NFC') ? undefined : 'mismatch'
 }
 
 // Primer filtro, antes de leer el archivo: parseImport vuelve a medir el texto, pero así no se carga en memoria.

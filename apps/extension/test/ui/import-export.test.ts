@@ -97,6 +97,19 @@ describe('buildExport y readImportText', () => {
   })
 })
 
+describe('imágenes subidas en la exportación', () => {
+  const key = 'icon:subida'
+
+  it('el archivo no lleva los bytes ni el tipo de la imagen y conserva su referencia', () => {
+    const withImage: Account = { ...account('a1', 'i1'), icon: { type: 'image', key } }
+    const { text } = buildExport(dataOf([identity('i1')], [withImage]), {}, [], NOW)
+    expect(text).not.toContain('base64')
+    expect(text).not.toContain('image/png')
+    const read = readImportText(text)
+    expect(read.ok && read.value.data.accounts[0]?.icon).toEqual({ type: 'image', key })
+  })
+})
+
 describe('readImportText', () => {
   const text = buildExport(dataOf([identity('i1')]), {}, [], NOW).text
 

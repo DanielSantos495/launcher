@@ -1,11 +1,27 @@
 import { chromium, expect, test } from '@playwright/test'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 // Prueba de humo con el Google Chrome instalado. Se pide a propósito (E2E_CHROME=1): abre una ventana real de Chrome,
 // aunque con un perfil temporal, así que no corre en `pnpm e2e` a secas ni en CI.
 test.skip(process.env['E2E_CHROME'] !== '1', 'Solo con E2E_CHROME=1: abre el Google Chrome instalado')
+
+// Con el host real instalado para Chrome (macOS), la extensión lo encontraría y le mandaría ping y listProfiles, que
+// solo leen. Aun así esta prueba no debe tocar el host real: se omite si su manifest existe.
+const realManifest = join(
+  homedir(),
+  'Library',
+  'Application Support',
+  'Google',
+  'Chrome',
+  'NativeMessagingHosts',
+  'com.curyapps.launcher.json',
+)
+test.skip(
+  existsSync(realManifest),
+  `El host real está instalado para Chrome (${realManifest}): se omite para no tocarlo`,
+)
 
 test('Chrome carga la extensión y crea una identidad', async () => {
   const extensionPath = resolve(import.meta.dirname, '..', '.output', 'chrome-mv3')

@@ -184,7 +184,8 @@ export const en: Record<MessageKey, string> = {
   'settings.mode.checking': 'Checking the program…',
 
   'install.title': 'Install the launcher-host program',
-  'install.outdated': 'The installed program is a different version. Download the latest and repeat these steps.',
+  'install.outdated':
+    'The installed program is a different version. Update or reinstall: download the latest version and repeat these steps.',
   'install.step1': 'Download launcher-host for macOS from the releases page:',
   'install.step2': 'Open Terminal in the folder where you downloaded it and run this command:',
   'install.step3': 'Come back here and press “Check again”.',

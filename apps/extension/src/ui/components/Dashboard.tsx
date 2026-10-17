@@ -13,6 +13,7 @@ import { usePaletteShortcut } from '../state/usePaletteShortcut'
 import type { AccountActions } from './AccountTile'
 import { CommandPalette } from './CommandPalette'
 import { DashboardDialogs, type DialogState } from './DashboardDialogs'
+import { MAIN_ID } from './Dialog'
 import { EmptyState } from './EmptyState'
 import { ErrorBanner } from './ErrorBanner'
 import { Header } from './Header'
@@ -317,7 +318,7 @@ export function Dashboard({ launcher, download }: DashboardProps) {
           setScreen((current) => (current === 'settings' ? 'board' : 'settings'))
         }}
       />
-      <main ref={mainRef} className="main" tabIndex={-1}>
+      <main ref={mainRef} id={MAIN_ID} className="main" tabIndex={-1}>
         {notice === undefined ? null : isStoreFull(notice) ? (
           <DataProblemBanner
             kind="too_large"

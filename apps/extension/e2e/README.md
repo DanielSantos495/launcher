@@ -17,7 +17,8 @@ pnpm e2e                             # compila la extensión y corre las pruebas
 - `copia.spec.ts`: exportar, importar de vuelta, JSON inválido, archivo ajeno y una dirección `javascript:` rechazada.
 - `sin-host.spec.ts`: Varios perfiles sin el programa (el Chromium de Playwright se presenta como «Chromium», una
   marca que la extensión rechaza, así que sale el aviso de navegador no compatible y no los pasos de instalación).
-- `chrome.spec.ts`: prueba de humo con el Google Chrome instalado; solo con `E2E_CHROME=1`.
+- `chrome.spec.ts`: prueba de humo con el Google Chrome instalado; solo con `E2E_CHROME=1`, y se omite si el host real está instalado para Chrome
+  (`~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.curyapps.launcher.json`), para no tocarlo.
 
 ## Google Chrome (Chrome 155.0.8059.82)
 

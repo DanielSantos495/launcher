@@ -157,9 +157,11 @@ export function useReorder(params: ReorderParams): {
       },
       drop: (kind, id, event) => {
         const current = dragging.current
+        // Otro tipo de elemento (una identidad soltada sobre una tarjeta): se deja pasar el evento sin vaciar el
+        // arrastre, para que llegue a la sección, que sí lo trata.
+        if (current?.kind !== kind) return
         dragging.current = undefined
         setDrag({ dragging: undefined, overId: undefined })
-        if (current?.kind !== kind) return
         event.preventDefault()
         event.stopPropagation()
         run(kind, current.id, labelOf(kind, current.id), { to: id })

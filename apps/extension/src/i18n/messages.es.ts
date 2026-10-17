@@ -183,7 +183,8 @@ export const es = {
   'settings.mode.checking': 'Comprobando el programa…',
 
   'install.title': 'Instala el programa launcher-host',
-  'install.outdated': 'El programa instalado es de otra versión. Descarga la última y repite estos pasos.',
+  'install.outdated':
+    'El programa instalado es de otra versión. Actualiza o reinstala: descarga la última versión y repite estos pasos.',
   'install.step1': 'Descarga launcher-host para macOS desde la página de versiones:',
   'install.step2': 'Abre Terminal en la carpeta donde lo descargaste y ejecuta este comando:',
   'install.step3': 'Vuelve aquí y pulsa «Comprobar de nuevo».',

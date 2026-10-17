@@ -217,6 +217,21 @@ describe('ordenar identidades', () => {
     })
   })
 
+  it('soltar la cabecera sobre una tarjeta de otra sección también las intercambia', async () => {
+    const { container } = await open(two(), [ana, beto])
+    const dt = dataTransfer()
+    const header = screen.getByRole('heading', { name: 'Beto' }).closest<HTMLElement>('.section__header')
+    if (header === null) throw new Error('falta la cabecera')
+    fireEvent.dragStart(header, { dataTransfer: dt })
+    // La tarjeta es casi toda la superficie de la sección: su drop no debe tragarse el arrastre de la identidad.
+    fireEvent.dragOver(tile(container, 'a'), { dataTransfer: dt })
+    fireEvent.drop(tile(container, 'a'), { dataTransfer: dt })
+    fireEvent.dragEnd(header, { dataTransfer: dt })
+    await waitFor(() => {
+      expect(names(container)).toEqual(['Beto', 'Ana'])
+    })
+  })
+
   it('arrastrar una cuenta no mueve identidades', async () => {
     const { container, mutations } = await open(two(), [ana, beto])
     const dt = dataTransfer()

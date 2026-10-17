@@ -58,7 +58,15 @@ export function parseInstallation(raw: unknown): InstallationView | undefined {
 
 // Carpetas vistas guardadas, o undefined si faltan o no son una lista de textos con el tope (se tratan como primera vez).
 export function parseSeenProfiles(raw: unknown): string[] | undefined {
-  const parsed = v.safeParse(v.pipe(v.array(v.pipe(v.string(), v.maxLength(255))), v.maxLength(SEEN_LIMIT)), raw)
+  const parsed = v.safeParse(
+    // El tope va antes de validar los elementos, como boundedArray.
+    v.pipe(
+      v.unknown(),
+      v.check((input) => !Array.isArray(input) || input.length <= SEEN_LIMIT),
+      v.array(v.pipe(v.string(), v.maxLength(255))),
+    ),
+    raw,
+  )
   return parsed.success ? parsed.output : undefined
 }
 

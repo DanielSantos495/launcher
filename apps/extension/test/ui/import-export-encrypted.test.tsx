@@ -42,6 +42,12 @@ describe('lib: contraseña nueva', () => {
     expect(checkNewPassword('a'.repeat(1025), 'a'.repeat(1025))).toBe('length')
     expect(checkNewPassword('a'.repeat(10), 'a'.repeat(11))).toBe('mismatch')
   })
+
+  it('la confirmación se compara ya normalizada a NFC, como la contraseña', () => {
+    // «é» compuesta frente a «e» + acento combinado: son la misma contraseña para el cifrado.
+    const composed = 'contraseña-é-larga'.normalize('NFC')
+    expect(checkNewPassword(composed, composed.normalize('NFD'))).toBeUndefined()
+  })
 })
 
 describe('exportar cifrado', () => {

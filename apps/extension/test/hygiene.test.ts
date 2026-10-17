@@ -8,7 +8,7 @@ const read = (relative: string): string => readFileSync(join(ROOT, relative), 'u
 describe('fuentes', () => {
   // Un BOM literal es invisible en el editor: se escribe siempre como escape.
   it.each(['src/ui/lib/import-export.ts', 'test/ui/import-export.test.ts'])('%s no lleva un BOM literal', (file) => {
-    expect(read(file)).not.toContain('﻿')
+    expect(read(file)).not.toContain('\uFEFF')
   })
 })
 

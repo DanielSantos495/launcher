@@ -11,4 +11,6 @@ Requisitos: Node ≥ 22.13 y pnpm 11.
     pnpm install --frozen-lockfile
     pnpm check
 
+Guía de uso (instalación, modos, copia de seguridad y privacidad): [GUIA.md](GUIA.md).
+
 Licencia MIT.

@@ -1,5 +1,8 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 
+// Id del contenido principal, que recibe el foco si quien abrió el diálogo ya no existe.
+export const MAIN_ID = 'main-content'
+
 interface DialogProps {
   readonly title: string
   readonly onClose: () => void
@@ -27,7 +30,7 @@ export function Dialog({ title, onClose, children, bare = false }: DialogProps) 
       dialog.close()
       // Si quien lo abrió ya no existe (se borró, o era el botón del estado vacío), el foco pasa al contenido principal.
       if (opener?.isConnected === true) opener.focus()
-      else document.querySelector<HTMLElement>('main[tabindex="-1"]')?.focus()
+      else document.getElementById(MAIN_ID)?.focus()
     }
   }, [])
 
