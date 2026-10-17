@@ -1,15 +1,25 @@
-import type { Bindings, ExportFile, ImportError, LauncherData, ProfileInfo } from '@account-launcher/core'
+import type { Bindings, CryptoError, ExportFile, ImportError, LauncherData, ProfileInfo } from '@account-launcher/core'
 import type { UiError, UiResults } from '@account-launcher/protocol'
-import { useId, useState, type ChangeEvent } from 'react'
+import { useId, useState, type ChangeEvent, type SyntheticEvent } from 'react'
 import type { MessageKey } from '../../i18n/i18n'
 import { useClock } from '../clock-context'
 import { useI18n } from '../i18n-context'
 import { BINDINGS_SECTION_ID } from '../lib/anchors'
 import { formatList } from '../lib/format'
-import { buildExport, checkFileSize, previewImport, readImportText } from '../lib/import-export'
+import {
+  buildEncryptedExport,
+  buildExport,
+  checkFileSize,
+  checkNewPassword,
+  isEncryptedImport,
+  previewImport,
+  readImportText,
+  unlockImport,
+} from '../lib/import-export'
 import type { Launcher } from '../state/useLauncher'
 import { Dialog } from './Dialog'
 import { ErrorBanner } from './ErrorBanner'
+import { Field, fieldAria } from './Field'
 
 interface ImportExportProps {
   readonly data: LauncherData
@@ -47,13 +57,44 @@ export function ImportExport({ data, bindings, profiles, send, reload, download 
   const now = useClock()
   const [problem, setProblem] = useState<ImportError | undefined>()
   const [preview, setPreview] = useState<Preview | undefined>()
+  // Texto de una copia cifrada a la espera de su contraseña. La contraseña vive solo en el diálogo.
+  const [locked, setLocked] = useState<string | undefined>()
+  const [encrypt, setEncrypt] = useState(false)
+  const [password, setPassword] = useState('')
+  const [confirmation, setConfirmation] = useState('')
+  const [exportError, setExportError] = useState<MessageKey | undefined>()
+  const [exporting, setExporting] = useState(false)
+  const passwordId = useId()
+  const confirmId = useId()
   const [result, setResult] = useState<
     { readonly summary: ImportResult; readonly names: readonly string[] } | undefined
   >()
 
-  const exportCopy = (): void => {
-    const { filename, text } = buildExport(data, bindings, profiles, now())
-    download(filename, text)
+  const exportCopy = async (): Promise<void> => {
+    setResult(undefined)
+    if (!encrypt) {
+      const { filename, text } = buildExport(data, bindings, profiles, now())
+      download(filename, text)
+      return
+    }
+    const invalid = checkNewPassword(password, confirmation)
+    if (invalid !== undefined) {
+      setExportError(invalid === 'length' ? 'export.error.length' : 'export.error.mismatch')
+      return
+    }
+    setExportError(undefined)
+    setExporting(true)
+    const sealed = await buildEncryptedExport(data, bindings, profiles, now(), password)
+    setExporting(false)
+    if (!sealed.ok) {
+      setExportError('export.error.failed')
+      return
+    }
+    download(sealed.value.filename, sealed.value.text)
+    // La contraseña no se conserva tras usarla.
+    setPassword('')
+    setConfirmation('')
+    setEncrypt(false)
   }
 
   const chooseFile = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
@@ -72,6 +113,11 @@ export function ImportExport({ data, bindings, profiles, send, reload, download 
       text = await file.text()
     } catch {
       setProblem({ code: 'invalid_json' })
+      return
+    }
+    if (isEncryptedImport(text)) {
+      setProblem(undefined)
+      setLocked(text)
       return
     }
     const parsed = readImportText(text)
@@ -100,11 +146,67 @@ export function ImportExport({ data, bindings, profiles, send, reload, download 
   return (
     <div className="backup">
       <div className="backup__row">
-        <button type="button" className="button" onClick={exportCopy}>
+        <button
+          type="button"
+          className="button"
+          disabled={exporting}
+          onClick={() => {
+            void exportCopy()
+          }}
+        >
           {t('export.action')}
         </button>
         <p className="backup__note">{t('export.warning')}</p>
       </div>
+      <div className="backup__row">
+        <label className="backup__check">
+          <input
+            type="checkbox"
+            checked={encrypt}
+            onChange={(event) => {
+              setEncrypt(event.target.checked)
+              setExportError(undefined)
+              if (!event.target.checked) {
+                setPassword('')
+                setConfirmation('')
+              }
+            }}
+          />{' '}
+          {t('export.encrypt')}
+        </label>
+      </div>
+      {encrypt ? (
+        <div className="backup__row backup__password">
+          <Field id={passwordId} label={t('export.password')} hint={t('export.password.hint')}>
+            <input
+              {...fieldAria(passwordId, true, false)}
+              type="password"
+              autoComplete="new-password"
+              maxLength={1024}
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value)
+              }}
+            />
+          </Field>
+          <Field
+            id={confirmId}
+            label={t('export.password.confirm')}
+            {...(exportError === undefined ? {} : { error: t(exportError) })}
+          >
+            <input
+              {...fieldAria(confirmId, false, exportError !== undefined)}
+              type="password"
+              autoComplete="new-password"
+              maxLength={1024}
+              value={confirmation}
+              onChange={(event) => {
+                setConfirmation(event.target.value)
+              }}
+            />
+          </Field>
+        </div>
+      ) : null}
       <div className="backup__row">
         <label className="button file-button">
           <input
@@ -146,6 +248,23 @@ export function ImportExport({ data, bindings, profiles, send, reload, download 
           )}
         </div>
       )}
+      {locked === undefined ? null : (
+        <UnlockDialog
+          text={locked}
+          onCancel={() => {
+            setLocked(undefined)
+          }}
+          onUnlocked={(file) => {
+            setLocked(undefined)
+            setProblem(undefined)
+            setPreview({ file, counts: previewImport(data, file) })
+          }}
+          onInvalid={(error) => {
+            setLocked(undefined)
+            setProblem(error)
+          }}
+        />
+      )}
       {preview === undefined ? null : (
         <ImportDialog
           preview={preview}
@@ -181,6 +300,75 @@ function ImportProblem({ problem }: { readonly problem: ImportError }) {
         )}
       </div>
     </div>
+  )
+}
+
+interface UnlockDialogProps {
+  readonly text: string
+  readonly onCancel: () => void
+  readonly onUnlocked: (file: ExportFile) => void
+  readonly onInvalid: (error: ImportError) => void
+}
+
+function isCryptoError(error: ImportError | CryptoError): error is CryptoError {
+  return error.code === 'bad_password' || error.code === 'bad_format' || error.code === 'invalid_password'
+}
+
+// Pide la contraseña de una copia cifrada. Se descifra aquí, en la página: la contraseña no pasa por el service worker,
+// no se guarda y se descarta al cerrar. Un error de cifrado no dice si falló la contraseña o los datos.
+function UnlockDialog({ text, onCancel, onUnlocked, onInvalid }: UnlockDialogProps) {
+  const { t } = useI18n()
+  const fieldId = useId()
+  const [password, setPassword] = useState('')
+  const [failure, setFailure] = useState<'unlock.error.bad_password' | 'unlock.error.bad_format' | undefined>()
+  const [working, setWorking] = useState(false)
+
+  const submit = async (event: SyntheticEvent): Promise<void> => {
+    event.preventDefault()
+    setWorking(true)
+    setFailure(undefined)
+    const opened = await unlockImport(text, password)
+    setWorking(false)
+    if (opened.ok) {
+      setPassword('')
+      onUnlocked(opened.value)
+    } else if (isCryptoError(opened.error)) {
+      setFailure(opened.error.code === 'bad_format' ? 'unlock.error.bad_format' : 'unlock.error.bad_password')
+    } else {
+      onInvalid(opened.error)
+    }
+  }
+
+  return (
+    <Dialog title={t('unlock.title')} onClose={working ? ignore : onCancel}>
+      <form
+        onSubmit={(event) => {
+          void submit(event)
+        }}
+      >
+        <p className="dialog__message">{t('unlock.intro')}</p>
+        <Field id={fieldId} label={t('unlock.password')} {...(failure === undefined ? {} : { error: t(failure) })}>
+          <input
+            {...fieldAria(fieldId, false, failure !== undefined)}
+            type="password"
+            autoComplete="off"
+            maxLength={1024}
+            value={password}
+            onChange={(event) => {
+              setPassword(event.target.value)
+            }}
+          />
+        </Field>
+        <div className="dialog__actions">
+          <button type="button" className="button" disabled={working} onClick={onCancel}>
+            {t('common.cancel')}
+          </button>
+          <button type="submit" className="button button--primary" disabled={working || password === ''}>
+            {working ? t('unlock.working') : t('unlock.submit')}
+          </button>
+        </div>
+      </form>
+    </Dialog>
   )
 }
 
