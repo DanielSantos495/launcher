@@ -24,6 +24,7 @@ type serveDeps struct {
 	Origin  string // primer argumento del navegador: chrome-extension://<id>/
 	PPID    int
 	Lookup  caller.ParentLookup
+	Chain   *caller.Chain // solo Windows: cmd.exe intermedio y PID reutilizado (nil en macOS)
 	Stdin   io.Reader
 	Stdout  io.Writer
 	Now     func() time.Time
@@ -50,7 +51,7 @@ func serve(d serveDeps) int {
 	if !caller.CheckOrigin(d.Origin, cfg) {
 		return write(d, logger, start, "-", protocol.Failure(protocol.Fail(protocol.UnsupportedBrowser)))
 	}
-	switch err := caller.CheckParent(cfg, d.PPID, d.Lookup); {
+	switch err := caller.CheckParentChain(cfg, d.PPID, d.Lookup, d.Chain); {
 	case err == nil:
 	case errors.Is(err, caller.ErrParentMismatch):
 		return write(d, logger, start, "-", protocol.Failure(protocol.Fail(protocol.UnsupportedBrowser)))

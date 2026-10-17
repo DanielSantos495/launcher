@@ -6,8 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
+	"unicode/utf16"
 
 	"github.com/DanielSantos495/launcher/native-host/internal/caller"
 )
@@ -148,40 +150,39 @@ func TestRegExeArguments(t *testing.T) {
 		t.Fatalf("Set = %+v, quiero %+v", calls[0], wantSet)
 	}
 
-	out = []byte("\r\nHKEY_CURRENT_USER\\Software\\Google\\Chrome\\NativeMessagingHosts\\x\r\n    (Default)    REG_SZ    " + manifest + "\r\n\r\n")
+	// Get no ejecuta reg.exe: lee con la API del registro.
+	api := newFakeRegAPI()
+	api.values[`Software\Google\Chrome\NativeMessagingHosts\com.curyapps.launcher.chrome`] = regValue{typ: regSZ, data: utf16z(manifest)}
+	r.Read = api.api()
 	calls = nil
 	got, found, err := r.Get(key)
-	if err != nil || !found || got != manifest {
-		t.Fatalf("Get = %q, %v, %v", got, found, err)
-	}
-	if want := (regCall{exe, []string{"query", key, "/ve"}}); !reflect.DeepEqual(calls[0], want) {
-		t.Fatalf("Get = %+v, quiero %+v", calls[0], want)
+	if err != nil || !found || got != manifest || len(calls) != 0 {
+		t.Fatalf("Get = %q, %v, %v (%d llamadas a reg.exe)", got, found, err, len(calls))
 	}
 
 	// Delete consulta antes y borra con /f.
-	calls = nil
 	if err := r.Delete(key); err != nil {
 		t.Fatal(err)
 	}
-	if len(calls) != 2 || !reflect.DeepEqual(calls[1], regCall{exe, []string{"delete", key, "/f"}}) {
+	if len(calls) != 1 || !reflect.DeepEqual(calls[0], regCall{exe, []string{"delete", key, "/f"}}) {
 		t.Fatalf("Delete = %+v", calls)
 	}
 
 	// Clave inexistente: Get da found=false y Delete no borra.
-	exit = 1
+	api.values = map[string]regValue{}
 	calls = nil
 	if _, found, err := r.Get(key); found || err != nil {
 		t.Fatalf("Get de clave ausente = %v, %v", found, err)
 	}
-	if err := r.Delete(key); err != nil || len(calls) != 2 {
+	if err := r.Delete(key); err != nil || len(calls) != 0 {
 		t.Fatalf("Delete de clave ausente: %v, %d llamadas", err, len(calls))
+	}
+	if api.open != api.closed {
+		t.Fatalf("claves abiertas %d, cerradas %d", api.open, api.closed)
 	}
 
 	// Otro código de salida es un error.
 	exit = 5
-	if _, _, err := r.Get(key); err == nil {
-		t.Fatal("Get con código 5 sin error")
-	}
 	if err := r.Set(key, manifest); err == nil {
 		t.Fatal("Set con código 5 sin error")
 	}
@@ -226,22 +227,186 @@ func TestRegExeRejectsBadArguments(t *testing.T) {
 	}
 }
 
-func TestParseRegQuery(t *testing.T) {
+// regValue es un valor falso del registro: su tipo y sus bytes en UTF-16.
+type regValue struct {
+	typ  uint32
+	data []uint16
+}
+
+// fakeRegAPI es un registro falso para RegAPI: valores por subclave, errores inyectados y recuento de aperturas.
+type fakeRegAPI struct {
+	values       map[string]regValue
+	missingValue map[string]bool // la clave existe pero sin valor por defecto
+	openErr      error
+	queryErr     error
+	open, closed int
+	handles      map[uintptr]string
+	queries      []int // tamaño de buf en cada Query
+}
+
+func newFakeRegAPI() *fakeRegAPI {
+	return &fakeRegAPI{values: map[string]regValue{}, missingValue: map[string]bool{}, handles: map[uintptr]string{}}
+}
+
+func (f *fakeRegAPI) api() *RegAPI {
+	return &RegAPI{
+		Open: func(subkey string) (uintptr, error) {
+			if f.openErr != nil {
+				return 0, f.openErr
+			}
+			if _, ok := f.values[subkey]; !ok && !f.missingValue[subkey] {
+				return 0, errRegNotFound
+			}
+			f.open++
+			h := uintptr(100 + f.open)
+			f.handles[h] = subkey
+			return h, nil
+		},
+		Query: func(h uintptr, buf []uint16) (uint32, uint32, error) {
+			f.queries = append(f.queries, len(buf))
+			if f.queryErr != nil {
+				return 0, 0, f.queryErr
+			}
+			v, ok := f.values[f.handles[h]]
+			if !ok {
+				return 0, 0, errRegNotFound
+			}
+			size := uint32(2 * len(v.data))
+			if len(v.data) > len(buf) {
+				return v.typ, size, errRegMoreData
+			}
+			copy(buf, v.data)
+			return v.typ, size, nil
+		},
+		Close: func(h uintptr) error {
+			if _, ok := f.handles[h]; !ok {
+				return errors.New("handle desconocido")
+			}
+			f.closed++
+			return nil
+		},
+	}
+}
+
+// utf16z es s en UTF-16 con el NUL final, como lo guarda el registro.
+func utf16z(s string) []uint16 { return append(utf16.Encode([]rune(s)), 0) }
+
+func TestRegExeGet(t *testing.T) {
+	const key = `HKCU\Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\com.curyapps.launcher.brave`
+	const sub = `Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\com.curyapps.launcher.brave`
+	const jose = `C:\Users\José\AppData\Local\AccountLauncher\brave\com.curyapps.launcher.brave.json`
+	long := `C:\` + strings.Repeat("ñ", 400) + `\m.json` // no cabe en el primer búfer (260)
+	boom := errors.New("acceso denegado")
 	for name, tc := range map[string]struct {
-		out  string
-		want string
-		ok   bool
+		setup     func(*fakeRegAPI)
+		want      string
+		found     bool
+		err       error // nil = sin error
+		queries   []int
+		noQueries bool
 	}{
-		"inglés":    {"\r\nHKEY_CURRENT_USER\\Software\\X\r\n    (Default)    REG_SZ    C:\\a b\\m.json\r\n\r\n", `C:\a b\m.json`, true},
-		"español":   {"HKEY_CURRENT_USER\\Software\\X\n    (Predeterminado)    REG_SZ    C:\\m.json\n", `C:\m.json`, true},
-		"sin valor": {"HKEY_CURRENT_USER\\Software\\X\r\n    (Default)    REG_SZ    (value not set)\r\n", `(value not set)`, true},
-		"vacía":     {"", "", false},
-		"otro tipo": {"HKEY_CURRENT_USER\\Software\\X\r\n    (Default)    REG_DWORD    0x1\r\n", "", false},
+		"ruta con José": {setup: func(f *fakeRegAPI) { f.values[sub] = regValue{regSZ, utf16z(jose)} }, want: jose, found: true,
+			queries: []int{260}},
+		"sin NUL final": {setup: func(f *fakeRegAPI) { f.values[sub] = regValue{regSZ, utf16.Encode([]rune(jose))} }, want: jose,
+			found: true, queries: []int{260}},
+		"valor largo, segundo intento": {setup: func(f *fakeRegAPI) { f.values[sub] = regValue{regSZ, utf16z(long)} },
+			want: long, found: true, queries: []int{260, len(utf16z(long))}},
+		"exactamente 260 unidades": {setup: func(f *fakeRegAPI) {
+			f.values[sub] = regValue{regSZ, utf16z(`C:\` + strings.Repeat("a", 256))}
+		}, want: `C:\` + strings.Repeat("a", 256), found: true, queries: []int{260}},
+		"261 unidades": {setup: func(f *fakeRegAPI) {
+			f.values[sub] = regValue{regSZ, utf16z(`C:\` + strings.Repeat("a", 257))}
+		}, want: `C:\` + strings.Repeat("a", 257), found: true, queries: []int{260, 261}},
+		"clave ausente": {setup: func(*fakeRegAPI) {}, noQueries: true},
+		"valor ausente": {setup: func(f *fakeRegAPI) { f.missingValue[sub] = true }, queries: []int{260}},
+		"valor vacío":   {setup: func(f *fakeRegAPI) { f.values[sub] = regValue{regSZ, []uint16{0}} }, queries: []int{260}},
+		"otro tipo":     {setup: func(f *fakeRegAPI) { f.values[sub] = regValue{2, utf16z(jose)} }, err: errRegBadValue, queries: []int{260}},
+		"NUL en medio":  {setup: func(f *fakeRegAPI) { f.values[sub] = regValue{regSZ, utf16z("C:\\a\x00b.json")} }, err: errRegBadValue, queries: []int{260}},
+		"sustituto suelto": {setup: func(f *fakeRegAPI) { f.values[sub] = regValue{regSZ, []uint16{'C', ':', '\\', 0xD800, 0}} },
+			err: errRegBadValue, queries: []int{260}},
+		"tamaño impar": {setup: func(f *fakeRegAPI) { f.values[sub] = regValue{regSZ, utf16z(jose)} }, err: errRegBadValue},
+		"demasiado largo": {setup: func(f *fakeRegAPI) {
+			f.values[sub] = regValue{regSZ, make([]uint16, maxRegValueChars+1)}
+		}, err: errRegBadValue, queries: []int{260}},
+		"error al abrir":     {setup: func(f *fakeRegAPI) { f.openErr = boom }, err: boom, noQueries: true},
+		"error al consultar": {setup: func(f *fakeRegAPI) { f.values[sub] = regValue{regSZ, utf16z(jose)}; f.queryErr = boom }, err: boom, queries: []int{260}},
 	} {
-		got, ok := parseRegQuery([]byte(tc.out))
-		if got != tc.want || ok != tc.ok {
-			t.Errorf("%s: parseRegQuery = %q, %v; quiero %q, %v", name, got, ok, tc.want, tc.ok)
-		}
+		t.Run(name, func(t *testing.T) {
+			f := newFakeRegAPI()
+			tc.setup(f)
+			api := f.api()
+			if name == "tamaño impar" {
+				query := api.Query
+				api.Query = func(h uintptr, buf []uint16) (uint32, uint32, error) {
+					typ, size, err := query(h, buf)
+					return typ, size - 1, err
+				}
+				tc.queries = []int{260}
+			}
+			got, found, err := RegExe{Read: api}.Get(key)
+			if tc.err == nil && err != nil || tc.err != nil && !errors.Is(err, tc.err) {
+				t.Fatalf("Get = %v, quiero %v", err, tc.err)
+			}
+			if got != tc.want || found != tc.found {
+				t.Fatalf("Get = %q, %v; quiero %q, %v", got, found, tc.want, tc.found)
+			}
+			if tc.noQueries {
+				tc.queries = nil
+			}
+			if !slices.Equal(f.queries, tc.queries) {
+				t.Fatalf("Query con búferes %v, quiero %v", f.queries, tc.queries)
+			}
+			if f.open != f.closed {
+				t.Fatalf("claves abiertas %d, cerradas %d", f.open, f.closed)
+			}
+		})
+	}
+	if _, _, err := (RegExe{}).Get(key); err == nil {
+		t.Fatal("Get sin RegAPI no falla")
+	}
+}
+
+func TestCopyBinaryWindows(t *testing.T) {
+	old := goos
+	goos = "windows"
+	t.Cleanup(func() { goos = old })
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "launcher-host.exe")
+
+	// Sin binario anterior.
+	if err := copyBinary(dst, []byte("v1")); err != nil {
+		t.Fatal(err)
+	}
+	// Con binario anterior y un .old de otra instalación: el anterior se renombra y los dos .old se borran.
+	if err := os.WriteFile(dst+".old", []byte("v0"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyBinary(dst, []byte("v2")); err != nil {
+		t.Fatal(err)
+	}
+	if got := readFile(t, dst); string(got) != "v2" {
+		t.Fatalf("binario = %q, quiero v2", got)
+	}
+	if _, err := os.Lstat(dst + ".old"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf(".old sigue ahí: %v", err)
+	}
+
+	// Un anterior que no se puede borrar (aquí, una carpeta con contenido; en Windows, un .exe en uso) se renombra y la
+	// instalación sigue: el .old se queda.
+	if err := os.Remove(dst); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dst, "x"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyBinary(dst, []byte("v3")); err != nil {
+		t.Fatalf("copyBinary con el anterior sin poder borrarse = %v", err)
+	}
+	if got := readFile(t, dst); string(got) != "v3" {
+		t.Fatalf("binario = %q, quiero v3", got)
+	}
+	if fi, err := os.Stat(dst + ".old"); err != nil || !fi.IsDir() {
+		t.Fatalf("el anterior no quedó en .old: %v", err)
 	}
 }
 

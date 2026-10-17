@@ -6,8 +6,8 @@ import (
 )
 
 // windowsPathKey normaliza una ruta absoluta de Windows para compararla: acepta "X:\..." (o con "/") y "\\servidor\
-// recurso", quita el prefijo "\\?\" de las rutas con letra de unidad, limpia "." y ".." y pasa a minúsculas (Windows
-// no distingue mayúsculas). Una ruta relativa, vacía o con NUL no es válida.
+// recurso", quita el prefijo "\\?\" de las rutas con letra de unidad, limpia "." y ".." y pasa a mayúsculas (Windows
+// no distingue mayúsculas y compara como RtlUpcaseUnicodeString: en mayúsculas, no en minúsculas). Una ruta relativa, vacía o con NUL no es válida.
 func windowsPathKey(p string) (string, bool) {
 	if p == "" || strings.ContainsRune(p, 0) {
 		return "", false
@@ -22,9 +22,9 @@ func windowsPathKey(p string) (string, bool) {
 		if len(c) < 2 || c[1] != ':' {
 			return "", false
 		}
-		return strings.ToLower(c), true
+		return strings.ToUpper(c), true
 	case strings.HasPrefix(s, "//") && len(s) > 2 && s[2] != '/' && s[2] != '?' && s[2] != '.':
-		return strings.ToLower("/" + path.Clean(s)), true
+		return strings.ToUpper("/" + path.Clean(s)), true
 	}
 	return "", false
 }

@@ -64,6 +64,7 @@ func runHost(origin string, stdin io.Reader, stdout io.Writer) int {
 		Origin:  origin,
 		PPID:    caller.ParentPID(),
 		Lookup:  caller.ParentExe,
+		Chain:   caller.SystemChain(),
 		Stdin:   stdin,
 		Stdout:  stdout,
 		Now:     time.Now,

@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
+	"unicode/utf16"
 	"unicode/utf8"
 
 	"github.com/DanielSantos495/launcher/native-host/internal/protocol"
@@ -32,11 +34,39 @@ type Runner func(exe string, args []string) (stdout []byte, exit int, err error)
 // regTimeout es lo máximo que se espera a reg.exe.
 const regTimeout = 10 * time.Second
 
-// RegExe usa reg.exe del sistema, sin shell. Path es la ruta absoluta de reg.exe (%SystemRoot%\System32\reg.exe).
+// RegExe escribe y borra con reg.exe del sistema, sin shell, y lee con la API del registro (Read). Path es la ruta
+// absoluta de reg.exe (<GetSystemDirectoryW>\reg.exe).
+//
+// La lectura no usa `reg query`: reg.exe escribe en la página de códigos de la consola y una ruta con caracteres no
+// ASCII (C:\Users\José) saldría cambiada. RegQueryValueExW la da en UTF-16.
 type RegExe struct {
 	Path string
-	Run  Runner // nil = ejecutar de verdad
+	Run  Runner  // nil = ejecutar de verdad
+	Read *RegAPI // nil = no se puede leer (Get falla)
 }
+
+// RegAPI son las tres llamadas a la API del registro que hacen falta para leer el valor por defecto de una clave de
+// HKCU. En Windows son RegOpenKeyExW, RegQueryValueExW y RegCloseKey; las pruebas pasan falsos.
+type RegAPI struct {
+	// Open abre HKCU\<subkey> para leer. Devuelve errRegNotFound si la clave no existe.
+	Open func(subkey string) (handle uintptr, err error)
+	// Query lee el valor por defecto en buf y devuelve su tipo y su tamaño en bytes. Devuelve errRegNotFound si el valor
+	// no existe y errRegMoreData (con el tamaño necesario) si no cabe en buf.
+	Query func(handle uintptr, buf []uint16) (valType uint32, size uint32, err error)
+	Close func(handle uintptr) error
+}
+
+var (
+	errRegNotFound = errors.New("registro: no existe")
+	errRegMoreData = errors.New("registro: el valor no cabe")
+	errRegBadValue = errors.New("registro: valor no valido")
+)
+
+const (
+	regSZ = 1 // REG_SZ
+	// maxRegValueChars es lo máximo que se lee de un valor (en unidades UTF-16): el de una ruta larga de Windows.
+	maxRegValueChars = 32768
+)
 
 // keyPattern: HKCU\Software\ seguido de segmentos de letras, cifras, punto, guion y guion bajo. Nada que empiece por
 // "-" o "/" (reg.exe lo tomaría por una opción) ni comillas.
@@ -93,28 +123,68 @@ func (r RegExe) Set(key, value string) error {
 	return nil
 }
 
-// Get ejecuta: reg.exe query <clave> /ve. Código 1 = la clave o el valor no existen.
+// Get lee el valor por defecto con la API del registro, en UTF-16. found es false si la clave o el valor no existen (o
+// el valor está vacío). Un valor que no es REG_SZ, con un NUL en medio o con UTF-16 inválido es un error.
 func (r RegExe) Get(key string) (string, bool, error) {
 	if !validKey(key) {
 		return "", false, errBadRegArg
 	}
-	out, exit, err := r.run([]string{"query", key, "/ve"})
+	if r.Read == nil || r.Read.Open == nil || r.Read.Query == nil || r.Read.Close == nil {
+		return "", false, errors.New("registro: lectura no disponible")
+	}
+	h, err := r.Read.Open(strings.TrimPrefix(key, `HKCU\`))
+	if errors.Is(err, errRegNotFound) {
+		return "", false, nil
+	}
 	if err != nil {
 		return "", false, err
 	}
-	switch exit {
-	case 0:
-	case 1:
-		return "", false, nil
-	default:
-		return "", false, fmt.Errorf("registro: reg query terminó con código %d", exit)
+	defer r.Read.Close(h)
+	buf := make([]uint16, 260)
+	for range 2 {
+		typ, size, err := r.Read.Query(h, buf)
+		switch {
+		case errors.Is(err, errRegNotFound):
+			return "", false, nil
+		case errors.Is(err, errRegMoreData):
+			if size == 0 || size > 2*maxRegValueChars {
+				return "", false, errRegBadValue
+			}
+			buf = make([]uint16, (size+1)/2)
+			continue
+		case err != nil:
+			return "", false, err
+		}
+		if typ != regSZ || size%2 != 0 || int(size/2) > len(buf) {
+			return "", false, errRegBadValue
+		}
+		v, ok := decodeRegString(buf[:size/2])
+		if !ok {
+			return "", false, errRegBadValue
+		}
+		return v, v != "", nil
 	}
-	v, ok := parseRegQuery(out)
-	return v, ok, nil
+	return "", false, errRegBadValue
 }
 
-// Delete ejecuta: reg.exe delete <clave> /f. Si la clave no existe no hace nada (se consulta antes: reg delete falla
-// con 1 tanto si no existe como por otras causas).
+// decodeRegString pasa un REG_SZ a UTF-8: quita los NUL del final (el registro no garantiza que haya uno) y rechaza un
+// NUL en medio y los sustitutos sueltos.
+func decodeRegString(u []uint16) (string, bool) {
+	for len(u) > 0 && u[len(u)-1] == 0 {
+		u = u[:len(u)-1]
+	}
+	if slices.Contains(u, 0) {
+		return "", false
+	}
+	runes := utf16.Decode(u)
+	if !slices.Equal(utf16.Encode(runes), u) {
+		return "", false // utf16.Decode cambia los sustitutos sueltos por U+FFFD
+	}
+	return string(runes), true
+}
+
+// Delete ejecuta: reg.exe delete <clave> /f. Si la clave no existe no hace nada (se consulta antes con Get: reg delete
+// falla con 1 tanto si no existe como por otras causas).
 func (r RegExe) Delete(key string) error {
 	if !validKey(key) {
 		return errBadRegArg
@@ -130,24 +200,6 @@ func (r RegExe) Delete(key string) error {
 		return fmt.Errorf("registro: reg delete terminó con código %d", exit)
 	}
 	return nil
-}
-
-// parseRegQuery lee la salida de `reg query <clave> /ve`: una línea "    (Predeterminado)    REG_SZ    <valor>".
-// El nombre del valor está traducido al idioma del sistema, el tipo REG_SZ no.
-func parseRegQuery(out []byte) (string, bool) {
-	for _, line := range strings.Split(string(out), "\n") {
-		line = strings.TrimRight(line, "\r")
-		i := strings.Index(line, "REG_SZ")
-		if i < 0 || !strings.HasPrefix(line, " ") {
-			continue
-		}
-		v := strings.TrimLeft(line[i+len("REG_SZ"):], " \t")
-		if v == "" {
-			return "", false
-		}
-		return v, true
-	}
-	return "", false
 }
 
 // runCommand ejecuta exe sin shell, con límite de tiempo, y separa el código de salida del error de ejecución.

@@ -250,8 +250,7 @@ func checkManifest(r *report, b Browser, binPath string, cfg caller.Config) {
 }
 
 // checkRegistry (solo Windows) comprueba que cada clave de HKCU del navegador apunte al manifest, sin distinguir
-// mayúsculas. reg.exe escribe en la página de códigos de la consola: una ruta con caracteres no ASCII puede salir
-// distinta y dar un FALLO falso.
+// mayúsculas. La clave se lee en UTF-16 con la API del registro (RegExe.Get), así que una ruta no ASCII sale tal cual.
 func checkRegistry(r *report, reg Registry, b Browser) {
 	if reg == nil {
 		return

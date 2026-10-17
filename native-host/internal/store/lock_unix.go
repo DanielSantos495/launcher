@@ -32,3 +32,6 @@ func lockFile(f *os.File, timeout time.Duration) error {
 		time.Sleep(min(lockPoll, time.Until(deadline)))
 	}
 }
+
+// unlockFile no hace nada: cerrar el descriptor suelta el flock.
+func unlockFile(*os.File) {}

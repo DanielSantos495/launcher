@@ -275,10 +275,20 @@ func write(p plan, binary []byte) error {
 	return nil
 }
 
-// copyBinary escribe el binario con 0700. Antes borra el anterior: sobrescribir en el mismo inodo un binario firmado
+// copyBinary escribe el binario con 0700. Antes quita el anterior: sobrescribir en el mismo inodo un binario firmado
 // hace que macOS mate el proceso al ejecutarlo. O_EXCL asegura que se crea un archivo nuevo.
+//
+// En Windows un .exe en uso no se puede borrar pero sí renombrar: el anterior pasa a <dst>.old y se intenta borrar al
+// final, sin fallar si sigue en uso (se borra en la siguiente instalación).
 func copyBinary(dst string, data []byte) error {
-	if err := os.Remove(dst); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if goos == "windows" {
+		old := dst + ".old"
+		_ = os.Remove(old)
+		if err := os.Rename(dst, old); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		defer func() { _ = os.Remove(old) }()
+	} else if err := os.Remove(dst); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 	f, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o700)

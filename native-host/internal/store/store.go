@@ -64,6 +64,7 @@ func (s *Store) Close() error {
 	}
 	f := s.lock
 	s.lock = nil
+	unlockFile(f)
 	return f.Close() // cerrar el descriptor suelta el flock
 }
 

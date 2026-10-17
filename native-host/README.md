@@ -111,8 +111,9 @@ go build -trimpath -o bin\launcher-host.exe .\cmd\launcher-host
 ```
 
 - **Archivos:** `%LOCALAPPDATA%\AccountLauncher\<navegador>\` con `launcher-host.exe`, `config.json`, el manifest
-  (`com.curyapps.launcher.<navegador>.json`) y, luego, `shared.json` e `icons\`. Sin comprobación de permisos: la
-  protección es la ACL de `%LOCALAPPDATA%`.
+  (`com.curyapps.launcher.<navegador>.json`) y, luego, `shared.json`, `shared.lock` e `icons\`. Sin comprobación de
+  permisos: el host no fija ACL propias y los archivos heredan la de `%LOCALAPPDATA%` (solo el usuario, SYSTEM y los
+  administradores). El almacén se bloquea con `LockFileEx` (`LOCKFILE_EXCLUSIVE_LOCK`), como `flock` en macOS.
 - **Ejecutable por defecto:** Brave `%ProgramFiles%` y luego `%LOCALAPPDATA%` (`...\BraveSoftware\Brave-Browser\Application\brave.exe`);
   Chrome `%ProgramFiles%`, `%ProgramFiles(x86)%` y `%LOCALAPPDATA%` (`...\Google\Chrome\Application\chrome.exe`); Edge
   `%ProgramFiles(x86)%` y `%ProgramFiles%` (`...\Microsoft\Edge\Application\msedge.exe`). Se toma la primera que existe;
@@ -120,29 +121,37 @@ go build -trimpath -o bin\launcher-host.exe .\cmd\launcher-host
 - **Registro (HKCU, valor por defecto = ruta del manifest):** Chrome `Software\Google\Chrome\NativeMessagingHosts\<nombre>`
   y Edge `Software\Microsoft\Edge\NativeMessagingHosts\<nombre>` (documentación oficial de Chrome y de Edge). Brave,
   sin documentación: `Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\<nombre>` **y** la de Chrome.
-  Se escriben con `%SystemRoot%\System32\reg.exe add <clave> /ve /t REG_SZ /d <manifest> /f`, sin shell y con la clave y
-  el valor validados; `doctor` las lee con `reg.exe query <clave> /ve`.
+  Se escriben con `<GetSystemDirectoryW>\reg.exe add <clave> /ve /t REG_SZ /d <manifest> /f`, sin shell y con la clave y
+  el valor validados; `doctor` las lee en UTF-16 con `RegOpenKeyExW`/`RegQueryValueExW`/`RegCloseKey` (una ruta con
+  `José` sale tal cual).
 - **Proceso padre:** PID con `CreateToolhelp32Snapshot`/`Process32First`/`Process32Next`; ruta con `OpenProcess`
-  (`PROCESS_QUERY_LIMITED_INFORMATION`) y `QueryFullProcessImageNameW`; se compara sin distinguir mayúsculas.
-- **Límites conocidos:** `uninstall` e `install` no pueden reemplazar un `launcher-host.exe` en uso (ejecútalos desde
-  otra copia y con el navegador cerrado); `reg.exe` escribe en la página de códigos de la consola, así que `doctor`
-  puede dar un FALLO falso del registro si la ruta tiene caracteres no ASCII; el PID del padre podría reutilizarse
-  (no se comprueba la hora de creación).
+  (`PROCESS_QUERY_LIMITED_INFORMATION`) y `QueryFullProcessImageNameW`; se compara sin distinguir mayúsculas (en
+  mayúsculas, como Windows). Chromium lanza el host con `cmd.exe /d /s /c` (salvo que la directiva
+  `NativeHostsExecutablesLaunchDirectly` diga otra cosa): si el padre es exactamente `<GetSystemDirectoryW>\cmd.exe`,
+  el navegador tiene que ser el abuelo (un solo nivel; cualquier fallo es rechazo). Con `GetProcessTimes`, un padre o
+  abuelo creado después que su hijo es un PID reutilizado y se rechaza.
+- **Límites conocidos:** `install` renombra un `launcher-host.exe` en uso a `launcher-host.exe.old` y lo intenta
+  borrar (si sigue en uso, se borra en la siguiente instalación); `uninstall` no puede borrarlo en uso (ciérralo con
+  el navegador). La comprobación del padre es más débil que en macOS: cualquier proceso del usuario puede lanzar el
+  host con un padre falso (`PROC_THREAD_ATTRIBUTE_PARENT_PROCESS`) apuntando al navegador; solo frena a quien no lo
+  intenta a propósito.
 
 Prueba manual pendiente en Windows:
 
 1. Compilar, `install --browser brave --extension-id bneoaiemijlpeiphloaencojmmjhlcni` y `doctor`: todo `OK`.
 2. `reg query "HKCU\Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\com.curyapps.launcher.brave" /ve`:
    apunta al manifest.
-3. F0 pendiente: ¿qué clave lee Brave? Borrar a mano una de las dos y ver si `ping` sigue funcionando; dejar solo la
+3. F0 pendiente, abuelo `cmd.exe`: comprobar con `ping` que el padre real es `C:\Windows\System32\cmd.exe` y el
+   abuelo `brave.exe` (y que con `NativeHostsExecutablesLaunchDirectly` el padre es `brave.exe`).
+4. F0 pendiente: ¿qué clave lee Brave? Borrar a mano una de las dos y ver si `ping` sigue funcionando; dejar solo la
    de Chrome y solo la de Brave.
-4. Los pasos 4 a 12 de «Prueba manual» con Brave en Windows: `ping`, `listProfiles`, `open` (que el padre coincide con
+5. Los pasos 4 a 12 de «Prueba manual» con Brave en Windows: `ping`, `listProfiles`, `open` (que el padre coincide con
    `brave.exe`), `createProfile`, emparejamiento y `sync`.
-5. F0 pendiente, *Job object*: abrir una URL con el navegador cerrado y comprobar que sigue abierto al salir el host.
-6. F0 pendiente, `--single-argument`: abrir con `open` una URL con `&`, espacios codificados y `%` y comprobar que
+6. F0 pendiente, _Job object_: abrir una URL con el navegador cerrado y comprobar que sigue abierto al salir el host.
+7. F0 pendiente, `--single-argument`: abrir con `open` una URL con `&`, espacios codificados y `%` y comprobar que
    llega íntegra (el host usa `--` antes de la URL).
-7. Repetir 1 a 4 con Chrome y Edge (rutas de Edge sin medir).
-8. `uninstall` y `doctor`: no está instalado; las claves de registro desaparecen.
+8. Repetir 1 a 5 con Chrome y Edge (rutas de Edge sin medir).
+9. `uninstall` y `doctor`: no está instalado; las claves de registro desaparecen.
 
 ## Pruebas
 

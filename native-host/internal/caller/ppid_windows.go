@@ -3,6 +3,7 @@
 package caller
 
 import (
+	"errors"
 	"os"
 	"syscall"
 	"unsafe"
@@ -11,9 +12,18 @@ import (
 // ParentPID es el PID del proceso padre, leído de una instantánea de procesos (CreateToolhelp32Snapshot,
 // Process32First y Process32Next). Si no se puede averiguar devuelve 0, que CheckParent rechaza.
 func ParentPID() int {
-	snap, err := syscall.CreateToolhelp32Snapshot(syscall.TH32CS_SNAPPROCESS, 0)
+	ppid, err := ppidOf(uint32(os.Getpid()))
 	if err != nil {
 		return 0
+	}
+	return ppid
+}
+
+// ppidOf es el PID del padre de pid según una instantánea de procesos.
+func ppidOf(pid uint32) (int, error) {
+	snap, err := syscall.CreateToolhelp32Snapshot(syscall.TH32CS_SNAPPROCESS, 0)
+	if err != nil {
+		return 0, err
 	}
 	defer syscall.CloseHandle(snap)
 	var entry syscall.ProcessEntry32
@@ -32,9 +42,37 @@ func ParentPID() int {
 		}
 		return procEntry{pid: entry.ProcessID, ppid: entry.ParentProcessID}, true
 	}
-	ppid, err := parentOf(uint32(os.Getpid()), next)
-	if err != nil {
-		return 0
+	return parentOf(pid, next)
+}
+
+// ProcessInfo devuelve el PID del padre de pid (instantánea de procesos) y su hora de creación (GetProcessTimes). Un
+// pid <= 4 se rechaza (0 es el proceso inactivo y 4 es System).
+func ProcessInfo(pid int) (ProcInfo, error) {
+	if pid <= 4 {
+		return ProcInfo{}, errors.New("caller: no hay proceso")
 	}
-	return ppid
+	h, err := syscall.OpenProcess(processQueryLimitedInformation, false, uint32(pid))
+	if err != nil {
+		return ProcInfo{}, err
+	}
+	defer syscall.CloseHandle(h)
+	var created, exited, kernel, user syscall.Filetime
+	if err := syscall.GetProcessTimes(h, &created, &exited, &kernel, &user); err != nil {
+		return ProcInfo{}, err
+	}
+	ppid, err := ppidOf(uint32(pid))
+	if err != nil {
+		return ProcInfo{}, err
+	}
+	return ProcInfo{PPID: ppid, Created: uint64(created.HighDateTime)<<32 | uint64(created.LowDateTime)}, nil
+}
+
+// SystemChain son las consultas de Windows para CheckParentChain: este proceso, ProcessInfo y cmd.exe de la carpeta
+// del sistema. Si no se puede averiguar la carpeta del sistema devuelve nil, y CheckParentChain falla cerrado.
+func SystemChain() *Chain {
+	dir, err := SystemDirectory()
+	if err != nil {
+		return nil
+	}
+	return &Chain{Self: os.Getpid(), Info: ProcessInfo, CmdExe: dir + `\cmd.exe`}
 }
