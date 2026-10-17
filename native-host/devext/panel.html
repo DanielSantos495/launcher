@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Account Launcher · host dev</title>
+    <style>
+      body {
+        font:
+          14px system-ui,
+          sans-serif;
+        margin: 24px;
+        max-width: 960px;
+      }
+      code {
+        background: #f1f1f1;
+        padding: 1px 4px;
+      }
+      fieldset {
+        margin: 0 0 16px;
+      }
+      label {
+        display: grid;
+        grid-template-columns: 140px 1fr;
+        gap: 8px;
+        margin: 4px 0;
+        align-items: center;
+      }
+      input {
+        font:
+          13px ui-monospace,
+          monospace;
+        padding: 3px 6px;
+      }
+      #commands button,
+      #tools button {
+        margin: 0 6px 6px 0;
+        padding: 4px 10px;
+      }
+      pre {
+        background: #f1f1f1;
+        padding: 12px;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Account Launcher · host dev</h1>
+    <p>Prueba manual del host nativo. Host: <code id="host">—</code> · Extensión: <code id="extension">—</code></p>
+    <fieldset>
+      <legend>Argumentos (cada botón usa solo los que necesita; los opcionales vacíos no se envían)</legend>
+      <div id="fields"></div>
+    </fieldset>
+    <h2>Comandos</h2>
+    <div id="commands"></div>
+    <div id="tools"></div>
+    <h2>Resultado</h2>
+    <pre id="result">—</pre>
+    <script type="module" src="panel.js"></script>
+  </body>
+</html>

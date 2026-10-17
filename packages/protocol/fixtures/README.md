@@ -124,14 +124,14 @@ pero no ser `null`). Los objetos del sobre, de `args` y de `result` son estricto
 | `pair.prove`    | `token`, `nonce`                            | `verifiedAt`                                                                                                                                       |
 | `sync.get`      | `token`                                     | `revision`, `data` (`null` o los datos guardados), `bindings` (los vínculos guardados); ver la sección siguiente                                   |
 | `sync.put`      | `token`, `baseRevision`, `data`, `bindings` | `revision`                                                                                                                                         |
-| `icons.get`     | `token`, `key`                              | `key`, `mime`, `base64` (implementación en F2)                                                                                                     |
-| `icons.put`     | `token`, `key`, `mime`, `base64`            | `{}` (implementación en F2)                                                                                                                        |
-| `icons.delete`  | `token`, `key`                              | `{}` (implementación en F2)                                                                                                                        |
+| `icons.get`     | `token`, `key`                              | `key`, `mime`, `base64` (el host los implementa en F1-B; la extensión los usa en F2)                                                               |
+| `icons.put`     | `token`, `key`, `mime`, `base64`            | `{}` (el host los implementa en F1-B; la extensión los usa en F2)                                                                                  |
+| `icons.delete`  | `token`, `key`                              | `{}` (el host los implementa en F1-B; la extensión los usa en F2)                                                                                  |
 
 Los formatos de cada campo están en «Reglas que Go debe replicar al carácter».
 
-Los comandos `icons.*` forman parte del contrato (esquemas y fixtures), pero se implementan en F2: en F1 la extensión
-solo usa iconos empaquetados y emoji, y no envía imágenes subidas.
+Los comandos `icons.*` forman parte del contrato (esquemas y fixtures) y el host los implementa desde F1-B; la extensión
+los usará en F2: en F1 solo usa iconos empaquetados y emoji, y no envía imágenes subidas.
 
 `listProfiles` y `pair.list`: el host omite los perfiles de `Local State` (y las instalaciones) que no cumplen
 `ProfileDirectorySchema` o `ProfileInfoSchema` (una carpeta que empieza por `-`, un nombre de más de 256 unidades
@@ -248,8 +248,9 @@ Un texto está en G si y solo si cumple todo esto:
 - **Puerto** (opcional): `:` seguido de un número de 1 a 65535 sin ceros a la izquierda, y nunca el puerto por
   defecto del esquema (`443` en `https`, `80` en `http`). `:` solo, `:0` y `:0443` no valen.
 - **Ruta, consulta y fragmento:** el primer `?` abre la consulta y el primer `#` abre el fragmento (los dos son
-  opcionales y pueden estar vacíos: `https://example.com/?` y `https://example.com/#` valen). Cada componente admite
-  todo el ASCII imprimible salvo los caracteres de esta tabla:
+  opcionales y pueden estar vacíos: `https://example.com/?` y `https://example.com/#` valen). Un `?` después del primer
+  `#` forma parte del fragmento y es válido (`https://example.com/#a?b`); solo un `?` anterior al `#` abre la consulta.
+  Cada componente admite todo el ASCII imprimible salvo los caracteres de esta tabla:
 
 | Componente                                                  | Caracteres excluidos                    | `%`        |
 | ----------------------------------------------------------- | --------------------------------------- | ---------- |
@@ -278,8 +279,9 @@ estándar): las acepta, y el navegador no las abre. `normalizeUrl` nunca las pro
 sin esquema (`--incognito`), _userinfo_, host sin ruta, salto de línea, esquema o host en mayúsculas, puerto por
 defecto, puerto con cero a la izquierda (`:0443`), puerto vacío (`:`), segmentos `.` y `..` (también `%2e%2e`),
 espacio, dominio Unicode sin punycode, IPv4 abreviada (`127.1`), de tres partes (`1.2.3`), con cero a la izquierda
-(`010.0.0.1`) o hexadecimal (`0x7f.0.0.1`), IPv6 (`[::1]`), `{`, `"`, `<`, `>` y `` ` `` en la ruta, `'` y `"` en la
-consulta, `` ` `` en el fragmento, `%zz` y `%` al final. Se aceptan la ruta `/`, una consulta con `%40`, `%7e` en
+(`010.0.0.1`) o hexadecimal (`0x7f.0.0.1`), una última etiqueta que empieza por `0x` (`example.0xab`), IPv6 (`[::1]`),
+`{`, `"`, `<`, `>`, `` ` `` y `\` en la ruta, `%2E%2E` en mayúsculas, `'` y `"` en la consulta, `` ` `` en el
+fragmento, `%zz` y `%` al final. Se aceptan la ruta `/`, una consulta con `%40`, un `?` dentro del fragmento, `%7e` en
 minúsculas, `{x}` en la consulta, `^` y `|` en la ruta, un dominio en punycode (`xn--`) y `http:`.
 
 ### Nombre de contenedor (`name` de `openTemporary`)

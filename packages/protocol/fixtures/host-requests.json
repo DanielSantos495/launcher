@@ -934,5 +934,32 @@
         }
       }
     }
+  },
+  {
+    "name": "url con barra invertida en la ruta",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://example.com/a\\b" } }
+  },
+  {
+    "name": "url con segmentos punto codificados en mayúsculas",
+    "valid": false,
+    "error": "bad_url",
+    "request": {
+      "v": 1,
+      "cmd": "open",
+      "args": { "profileDirectory": "Default", "url": "https://example.com/%2E%2E/x" }
+    }
+  },
+  {
+    "name": "url cuya última etiqueta empieza por 0x",
+    "valid": false,
+    "error": "bad_url",
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://example.0xab/" } }
+  },
+  {
+    "name": "url con ? en el fragmento",
+    "valid": true,
+    "request": { "v": 1, "cmd": "open", "args": { "profileDirectory": "Default", "url": "https://example.com/#a?b" } }
   }
 ]
