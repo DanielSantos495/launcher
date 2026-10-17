@@ -308,13 +308,13 @@ func TestInstallOverrideExeMustExistAndBeAbsolute(t *testing.T) {
 func TestNotDarwinIsRefused(t *testing.T) {
 	f := newFixture(t, "brave")
 	goos = "linux" // newFixture restaura el valor original al terminar
-	if err := Install(f.opts()); err == nil || !strings.Contains(err.Error(), "solo macOS en F1") {
-		t.Fatalf("Install en linux = %v; quiero «solo macOS en F1»", err)
+	if err := Install(f.opts()); err == nil || !strings.Contains(err.Error(), "solo macOS y Windows") {
+		t.Fatalf("Install en linux = %v; quiero «solo macOS y Windows»", err)
 	}
-	if err := Uninstall(f.opts(), false); err == nil || !strings.Contains(err.Error(), "solo macOS en F1") {
+	if err := Uninstall(f.opts(), false); err == nil || !strings.Contains(err.Error(), "solo macOS y Windows") {
 		t.Fatalf("Uninstall en linux = %v", err)
 	}
-	if err := Pairing(f.opts("brave"), true, 0); err == nil || !strings.Contains(err.Error(), "solo macOS en F1") {
+	if err := Pairing(f.opts("brave"), true, 0); err == nil || !strings.Contains(err.Error(), "solo macOS y Windows") {
 		t.Fatalf("Pairing en linux = %v", err)
 	}
 	if Doctor(f.opts("brave"), false) {

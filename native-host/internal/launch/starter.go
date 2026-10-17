@@ -25,7 +25,9 @@ func buildCmd(exe string, args []string) (*exec.Cmd, error) {
 	if !filepath.IsAbs(exe) {
 		return nil, ErrInvalidArgument
 	}
-	return exec.Command(exe, args...), nil
+	cmd := exec.Command(exe, args...)
+	detach(cmd)
+	return cmd, nil
 }
 
 // Start lanza exe con args y suelta el proceso. El error de exec lleva la ruta del ejecutable; se quita y solo queda la

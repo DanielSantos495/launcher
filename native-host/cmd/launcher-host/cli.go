@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 
 	"github.com/DanielSantos495/launcher/native-host/internal/install"
@@ -19,7 +20,19 @@ type cliDeps struct {
 }
 
 func defaultCLIDeps() cliDeps {
-	return cliDeps{Home: os.UserHomeDir, Executable: executablePath}
+	return cliDeps{Home: baseDir, Executable: executablePath}
+}
+
+// baseDir es la carpeta de la que cuelgan las rutas del host: la carpeta personal en macOS y %LOCALAPPDATA% en Windows.
+func baseDir() (string, error) {
+	if runtime.GOOS == "windows" {
+		dir := os.Getenv("LOCALAPPDATA")
+		if dir == "" {
+			return "", errors.New("falta %LOCALAPPDATA%")
+		}
+		return dir, nil
+	}
+	return os.UserHomeDir()
 }
 
 // runCLI ejecuta install, uninstall, doctor o pairing (args[0]) y devuelve el código de salida: 0 bien, 1 fallo, 2 uso

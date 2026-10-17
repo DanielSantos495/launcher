@@ -3,8 +3,13 @@ package caller
 import (
 	"errors"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
+
+// windowsPaths indica que las rutas se comparan como en Windows (sin distinguir mayúsculas). Las pruebas lo activan
+// para simular Windows en otro sistema.
+var windowsPaths = runtime.GOOS == "windows"
 
 // ErrParentMismatch indica que el proceso padre no es el navegador configurado.
 var ErrParentMismatch = errors.New("caller: el proceso padre no es el navegador configurado")
@@ -44,6 +49,9 @@ func CheckParent(c Config, ppid int, lookup ParentLookup) error {
 // samePath compara dos rutas absolutas tras resolver enlaces simbólicos y limpiarlas. Una ruta vacía o relativa nunca
 // coincide. Si una ruta no se puede resolver (no existe), se compara su forma limpia.
 func samePath(a, b string) bool {
+	if windowsPaths {
+		return SameWindowsPath(resolve(a), resolve(b))
+	}
 	if !filepath.IsAbs(a) || !filepath.IsAbs(b) {
 		return false
 	}

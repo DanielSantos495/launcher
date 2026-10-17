@@ -1,4 +1,4 @@
-// Package install instala y diagnostica el host nativo en macOS: copia el binario, escribe config.json y el manifest
+// Package install instala y diagnostica el host nativo en macOS y Windows: copia el binario, escribe config.json y el manifest
 // de native messaging, y comprueba que todo siga en su sitio (doctor). Los mensajes van al usuario que ejecuta el
 // subcomando, así que pueden llevar sus rutas; nunca llevan tokens ni nombres de perfil.
 package install
@@ -10,12 +10,18 @@ type Browser struct {
 	Name        string // brave | chrome | edge
 	Exe         string // ejecutable del navegador
 	UserDataDir string // datos del navegador (Local State, perfiles)
-	ManifestDir string // carpeta de manifests de native messaging que lee ese navegador
+	ManifestDir string // carpeta de manifests de native messaging que lee ese navegador (en Windows, la del host)
+	// RegistryKeys son las claves de HKCU que apuntan al manifest (solo Windows).
+	RegistryKeys []string
 }
 
-// Browsers devuelve los navegadores de macOS para el usuario cuya carpeta personal es home, en el orden brave, chrome,
-// edge. En macOS Brave lee los manifests de la carpeta de Chrome (medido en el spike); Edge, los suyos.
+// Browsers devuelve los navegadores para el usuario cuya carpeta personal es home (en Windows, %LOCALAPPDATA%), en el
+// orden brave, chrome, edge. En macOS Brave lee los manifests de la carpeta de Chrome (medido en el spike); Edge, los
+// suyos. En Windows, véase windowsBrowsers.
 func Browsers(home string) []Browser {
+	if goos == "windows" {
+		return windowsBrowsers(winEnvFromOS(home), regularFile)
+	}
 	support := filepath.Join(home, "Library", "Application Support")
 	chromeHosts := filepath.Join(support, "Google", "Chrome", "NativeMessagingHosts")
 	return []Browser{
@@ -43,5 +49,8 @@ func Browsers(home string) []Browser {
 // AppDir es la carpeta de instalación del host de un navegador: launcher-host, config.json, shared.json, shared.lock,
 // icons/ y host.log. Cada navegador tiene la suya.
 func AppDir(home, browser string) string {
+	if goos == "windows" {
+		return windowsAppDir(home, browser)
+	}
 	return filepath.Join(home, "Library", "Application Support", "AccountLauncher", browser)
 }

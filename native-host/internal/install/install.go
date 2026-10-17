@@ -19,8 +19,17 @@ import (
 	"github.com/DanielSantos495/launcher/native-host/internal/launch"
 )
 
-// BinaryName es el nombre del binario dentro de la carpeta de instalación.
+// BinaryName es el nombre del binario dentro de la carpeta de instalación en macOS; en Windows lleva ".exe"
+// (binaryName).
 const BinaryName = "launcher-host"
+
+// binaryName es el nombre del binario instalado en el sistema actual.
+func binaryName() string {
+	if goos == "windows" {
+		return BinaryName + ".exe"
+	}
+	return BinaryName
+}
 
 // maxBinaryBytes es el tamaño máximo del binario que se copia. Se lee entero a memoria antes de borrar el anterior,
 // por si install se ejecuta desde la propia copia instalada.
@@ -42,7 +51,7 @@ var (
 // Options reúne lo que necesitan Install, Uninstall, Doctor y Pairing. Los campos de reloj, aleatoriedad, lanzador y
 // espera solo los usa Doctor con verify; si faltan, se usan los del sistema.
 type Options struct {
-	Home        string
+	Home        string   // carpeta personal en macOS; en Windows, %LOCALAPPDATA%
 	Browsers    []string // vacío = los detectados (ejecutable presente) o, en uninstall y doctor, los instalados
 	ExtensionID string
 	Source      string // binario que se copia (os.Executable en producción)
@@ -53,6 +62,7 @@ type Options struct {
 	Rand        io.Reader
 	Starter     launch.Starter
 	Sleep       func(time.Duration)
+	Registry    Registry // solo Windows; si falta se usa reg.exe del sistema
 }
 
 // defaults completa lo que falte con el sistema real.
@@ -75,12 +85,23 @@ func (o Options) defaults() Options {
 	return o
 }
 
-// checkOS rechaza cualquier sistema que no sea macOS: en F1 solo hay rutas de macOS.
+// checkOS rechaza cualquier sistema que no sea macOS o Windows.
 func checkOS() error {
-	if goos != "darwin" {
-		return errors.New("solo macOS en F1")
+	if goos != "darwin" && goos != "windows" {
+		return errors.New("solo macOS y Windows")
 	}
 	return nil
+}
+
+// registryFor devuelve el registro de Windows de o, o nil en otros sistemas. En Windows, sin uno inyectado usa reg.exe.
+func registryFor(o Options) (Registry, error) {
+	if goos != "windows" {
+		return nil, nil
+	}
+	if o.Registry != nil {
+		return o.Registry, nil
+	}
+	return systemRegistry()
 }
 
 // byName devuelve el navegador de nombre name, o un error de uso si no es uno de los admitidos.
@@ -157,6 +178,7 @@ type plan struct {
 	config       []byte
 	manifestPath string
 	manifest     []byte
+	registry     Registry // nil fuera de Windows
 }
 
 // Install copia el binario a la carpeta de instalación de cada navegador, escribe config.json y el manifest. Valida
@@ -169,6 +191,10 @@ func Install(o Options) error {
 	}
 	if !caller.ValidExtensionID(o.ExtensionID) {
 		return usageError("el id de la extensión debe cumplir ^[a-p]{32}$ (--extension-id)")
+	}
+	reg, err := registryFor(o)
+	if err != nil {
+		return err
 	}
 	targets, err := installTargets(o)
 	if err != nil {
@@ -183,8 +209,8 @@ func Install(o Options) error {
 
 	plans := make([]plan, 0, len(targets))
 	for _, b := range targets {
-		p := plan{browser: b, appDir: AppDir(o.Home, b.Name)}
-		p.binaryPath = filepath.Join(p.appDir, BinaryName)
+		p := plan{browser: b, appDir: AppDir(o.Home, b.Name), registry: reg}
+		p.binaryPath = filepath.Join(p.appDir, binaryName())
 		cfg := caller.Config{
 			Browser: b.Name, Exe: b.Exe, UserDataDir: b.UserDataDir, ExtensionID: o.ExtensionID, BinarySHA256: hash,
 		}
@@ -208,6 +234,11 @@ func Install(o Options) error {
 		}
 		fmt.Fprintf(o.Out, "Instalado para %s:\n  binario:  %s\n  config:   %s\n  manifest: %s\n",
 			p.browser.Name, p.binaryPath, filepath.Join(p.appDir, caller.ConfigFile), p.manifestPath)
+		for _, key := range p.browser.RegistryKeys {
+			if p.registry != nil {
+				fmt.Fprintf(o.Out, "  registro: %s\n", key)
+			}
+		}
 	}
 	return nil
 }
@@ -230,7 +261,18 @@ func write(p plan, binary []byte) error {
 	if err := os.MkdirAll(p.browser.ManifestDir, 0o755); err != nil {
 		return err
 	}
-	return writeAtomic(p.manifestPath, p.manifest, 0o644)
+	if err := writeAtomic(p.manifestPath, p.manifest, 0o644); err != nil {
+		return err
+	}
+	// En Windows el navegador encuentra el manifest por el registro: va después del manifest.
+	if p.registry != nil {
+		for _, key := range p.browser.RegistryKeys {
+			if err := p.registry.Set(key, p.manifestPath); err != nil {
+				return fmt.Errorf("registro %s: %w", key, err)
+			}
+		}
+	}
+	return nil
 }
 
 // copyBinary escribe el binario con 0700. Antes borra el anterior: sobrescribir en el mismo inodo un binario firmado
@@ -333,6 +375,10 @@ func Uninstall(o Options, purge bool) error {
 	if err := checkOS(); err != nil {
 		return err
 	}
+	reg, err := registryFor(o)
+	if err != nil {
+		return err
+	}
 	targets, err := existing(o.Home, o.Browsers)
 	if err != nil {
 		return err
@@ -349,7 +395,15 @@ func Uninstall(o Options, purge bool) error {
 			fmt.Fprintf(o.Out, "%s: no había nada instalado.\n", b.Name)
 			continue
 		}
-		paths := []string{manifest, filepath.Join(app, BinaryName), filepath.Join(app, caller.ConfigFile)}
+		// En Windows primero el registro: el navegador deja de ver el host antes de que desaparezcan sus archivos.
+		if reg != nil {
+			for _, key := range b.RegistryKeys {
+				if err := reg.Delete(key); err != nil {
+					errs = append(errs, fmt.Errorf("registro %s: %w", key, err))
+				}
+			}
+		}
+		paths := []string{manifest, filepath.Join(app, binaryName()), filepath.Join(app, caller.ConfigFile)}
 		for _, p := range paths {
 			if err := os.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
 				errs = append(errs, err)

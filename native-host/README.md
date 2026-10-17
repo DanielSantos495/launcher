@@ -1,7 +1,7 @@
 # Host nativo de Account Launcher
 
 Programa en Go (solo librería estándar) que la extensión usa por native messaging para abrir perfiles del navegador y
-guardar el estado compartido entre perfiles. En F1 solo funciona en macOS (Brave, Chrome y Edge). El contrato con la
+guardar el estado compartido entre perfiles. Funciona en macOS (Brave, Chrome y Edge, probado) y tiene soporte para Windows sin verificar en Windows real. El contrato con la
 extensión está en [`packages/protocol/fixtures/README.md`](../packages/protocol/fixtures/README.md).
 
 ## Compilar
@@ -99,6 +99,51 @@ Se carga sin empaquetar en `brave://extensions` (modo desarrollador). El icono a
 12. `./bin/launcher-host uninstall --browser brave`: `doctor` informa que no está instalado; `ping` desde el panel →
     error de host no encontrado.
 
+## Windows (sin verificar en Windows real)
+
+Escrito y comprobado solo con pruebas en macOS (fakes) y `GOOS=windows go vet`/`go build`. Nada de esto se ha ejecutado en Windows.
+
+```powershell
+go build -trimpath -o bin\launcher-host.exe .\cmd\launcher-host
+.\bin\launcher-host.exe install --browser brave --extension-id <ID> [--exe <ruta de brave.exe>]
+.\bin\launcher-host.exe doctor --browser brave
+.\bin\launcher-host.exe uninstall --browser brave [--purge]
+```
+
+- **Archivos:** `%LOCALAPPDATA%\AccountLauncher\<navegador>\` con `launcher-host.exe`, `config.json`, el manifest
+  (`com.curyapps.launcher.<navegador>.json`) y, luego, `shared.json` e `icons\`. Sin comprobación de permisos: la
+  protección es la ACL de `%LOCALAPPDATA%`.
+- **Ejecutable por defecto:** Brave `%ProgramFiles%` y luego `%LOCALAPPDATA%` (`...\BraveSoftware\Brave-Browser\Application\brave.exe`);
+  Chrome `%ProgramFiles%`, `%ProgramFiles(x86)%` y `%LOCALAPPDATA%` (`...\Google\Chrome\Application\chrome.exe`); Edge
+  `%ProgramFiles(x86)%` y `%ProgramFiles%` (`...\Microsoft\Edge\Application\msedge.exe`). Se toma la primera que existe;
+  `--exe` la sustituye. Datos: `%LOCALAPPDATA%\<BraveSoftware\Brave-Browser | Google\Chrome | Microsoft\Edge>\User Data`.
+- **Registro (HKCU, valor por defecto = ruta del manifest):** Chrome `Software\Google\Chrome\NativeMessagingHosts\<nombre>`
+  y Edge `Software\Microsoft\Edge\NativeMessagingHosts\<nombre>` (documentación oficial de Chrome y de Edge). Brave,
+  sin documentación: `Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\<nombre>` **y** la de Chrome.
+  Se escriben con `%SystemRoot%\System32\reg.exe add <clave> /ve /t REG_SZ /d <manifest> /f`, sin shell y con la clave y
+  el valor validados; `doctor` las lee con `reg.exe query <clave> /ve`.
+- **Proceso padre:** PID con `CreateToolhelp32Snapshot`/`Process32First`/`Process32Next`; ruta con `OpenProcess`
+  (`PROCESS_QUERY_LIMITED_INFORMATION`) y `QueryFullProcessImageNameW`; se compara sin distinguir mayúsculas.
+- **Límites conocidos:** `uninstall` e `install` no pueden reemplazar un `launcher-host.exe` en uso (ejecútalos desde
+  otra copia y con el navegador cerrado); `reg.exe` escribe en la página de códigos de la consola, así que `doctor`
+  puede dar un FALLO falso del registro si la ruta tiene caracteres no ASCII; el PID del padre podría reutilizarse
+  (no se comprueba la hora de creación).
+
+Prueba manual pendiente en Windows:
+
+1. Compilar, `install --browser brave --extension-id bneoaiemijlpeiphloaencojmmjhlcni` y `doctor`: todo `OK`.
+2. `reg query "HKCU\Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\com.curyapps.launcher.brave" /ve`:
+   apunta al manifest.
+3. F0 pendiente: ¿qué clave lee Brave? Borrar a mano una de las dos y ver si `ping` sigue funcionando; dejar solo la
+   de Chrome y solo la de Brave.
+4. Los pasos 4 a 12 de «Prueba manual» con Brave en Windows: `ping`, `listProfiles`, `open` (que el padre coincide con
+   `brave.exe`), `createProfile`, emparejamiento y `sync`.
+5. F0 pendiente, *Job object*: abrir una URL con el navegador cerrado y comprobar que sigue abierto al salir el host.
+6. F0 pendiente, `--single-argument`: abrir con `open` una URL con `&`, espacios codificados y `%` y comprobar que
+   llega íntegra (el host usa `--` antes de la URL).
+7. Repetir 1 a 4 con Chrome y Edge (rutas de Edge sin medir).
+8. `uninstall` y `doctor`: no está instalado; las claves de registro desaparecen.
+
 ## Pruebas
 
 ```bash
@@ -106,5 +151,5 @@ cd native-host
 test -z "$(gofmt -l .)" && go vet ./... && go test ./...
 ```
 
-Las pruebas no tocan `~/Library`, no lanzan ningún navegador y no guardan ninguna clave. La prueba de extremo a
+Las pruebas no tocan `~/Library`, no lanzan ningún navegador, no guardan ninguna clave ni ejecutan `reg.exe`. Además: `GOOS=windows GOARCH=amd64 go vet ./... && GOOS=windows GOARCH=amd64 go build ./...`. La prueba de extremo a
 extremo (`cmd/launcher-host/e2e_darwin_test.go`) solo corre en macOS.

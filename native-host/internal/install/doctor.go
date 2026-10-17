@@ -59,6 +59,12 @@ func Doctor(o Options, verify bool) bool {
 		r.fail("%v", err)
 		return false
 	}
+	reg, err := registryFor(o)
+	if err != nil {
+		r.fail("%v", err)
+		return false
+	}
+	o.Registry = reg
 	targets, err := existing(o.Home, o.Browsers)
 	if err != nil {
 		r.fail("%v", err)
@@ -77,7 +83,7 @@ func Doctor(o Options, verify bool) bool {
 func checkBrowser(r *report, o Options, b Browser, verify bool) {
 	name := b.Name
 	app := AppDir(o.Home, name)
-	binPath := filepath.Join(app, BinaryName)
+	binPath := filepath.Join(app, binaryName())
 	cfgPath := filepath.Join(app, caller.ConfigFile)
 	if !exists(binPath) && !exists(cfgPath) && !exists(manifestPath(b)) {
 		r.fail("%s: no está instalado", name)
@@ -94,6 +100,7 @@ func checkBrowser(r *report, o Options, b Browser, verify bool) {
 			r.fail("%s: no existe el ejecutable del navegador (%s)", name, cfg.Exe)
 		}
 		checkManifest(r, b, binPath, cfg)
+		checkRegistry(r, o.Registry, b)
 	}
 	st := checkStore(r, name, app)
 
@@ -120,7 +127,10 @@ func checkBrowser(r *report, o Options, b Browser, verify bool) {
 }
 
 // private dice si un archivo o carpeta no da ningún permiso a su grupo ni a otros.
-func private(mode fs.FileMode) bool { return mode.Perm()&0o077 == 0 }
+//
+// En Windows los bits de permiso no significan nada (os.Stat inventa 0666 o 0444): la protección es la ACL de
+// %LOCALAPPDATA%, que es del usuario, y esta comprobación se da por buena.
+func private(mode fs.FileMode) bool { return goos == "windows" || mode.Perm()&0o077 == 0 }
 
 func checkAppDir(r *report, name, app string) {
 	fi, err := os.Stat(app)
@@ -164,15 +174,15 @@ func checkBinary(r *report, name, binPath string, cfg caller.Config, cfgOK bool)
 	fi, err := os.Stat(binPath)
 	switch {
 	case err != nil:
-		r.fail("%s: falta %s", name, BinaryName)
+		r.fail("%s: falta %s", name, binaryName())
 		return
 	case !fi.Mode().IsRegular():
-		r.fail("%s: %s no es un archivo normal", name, BinaryName)
+		r.fail("%s: %s no es un archivo normal", name, binaryName())
 		return
-	case !private(fi.Mode()) || fi.Mode().Perm()&0o100 == 0:
-		r.fail("%s: %s con permisos %04o (debe ser 0700)", name, BinaryName, fi.Mode().Perm())
+	case !private(fi.Mode()) || (goos != "windows" && fi.Mode().Perm()&0o100 == 0):
+		r.fail("%s: %s con permisos %04o (debe ser 0700)", name, binaryName(), fi.Mode().Perm())
 	default:
-		r.ok("%s: %s (0700)", name, BinaryName)
+		r.ok("%s: %s (0700)", name, binaryName())
 	}
 	if !cfgOK {
 		return
@@ -180,11 +190,11 @@ func checkBinary(r *report, name, binPath string, cfg caller.Config, cfgOK bool)
 	sum, err := fileSHA256(binPath)
 	switch {
 	case err != nil:
-		r.fail("%s: no se pudo leer %s para comprobar su hash", name, BinaryName)
+		r.fail("%s: no se pudo leer %s para comprobar su hash", name, binaryName())
 	case sum != cfg.BinarySHA256:
-		r.fail("%s: el hash de %s no coincide con config.json (modificado o sustituido): vuelve a ejecutar install", name, BinaryName)
+		r.fail("%s: el hash de %s no coincide con config.json (modificado o sustituido): vuelve a ejecutar install", name, binaryName())
 	default:
-		r.ok("%s: el hash de %s coincide con config.json", name, BinaryName)
+		r.ok("%s: el hash de %s coincide con config.json", name, binaryName())
 	}
 }
 
@@ -236,6 +246,29 @@ func checkManifest(r *report, b Browser, binPath string, cfg caller.Config) {
 	}
 	if !bad {
 		r.ok("%s: manifest correcto (nombre, ruta y allowed_origins)", b.Name)
+	}
+}
+
+// checkRegistry (solo Windows) comprueba que cada clave de HKCU del navegador apunte al manifest, sin distinguir
+// mayúsculas. reg.exe escribe en la página de códigos de la consola: una ruta con caracteres no ASCII puede salir
+// distinta y dar un FALLO falso.
+func checkRegistry(r *report, reg Registry, b Browser) {
+	if reg == nil {
+		return
+	}
+	want := manifestPath(b)
+	for _, key := range b.RegistryKeys {
+		got, found, err := reg.Get(key)
+		switch {
+		case err != nil:
+			r.fail("%s: no se pudo leer la clave de registro %s", b.Name, key)
+		case !found:
+			r.fail("%s: falta la clave de registro %s", b.Name, key)
+		case got != want && !caller.SameWindowsPath(got, want):
+			r.fail("%s: la clave de registro %s apunta a otro manifest (%s)", b.Name, key, got)
+		default:
+			r.ok("%s: clave de registro %s correcta", b.Name, key)
+		}
 	}
 }
 

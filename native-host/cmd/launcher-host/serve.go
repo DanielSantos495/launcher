@@ -55,7 +55,7 @@ func serve(d serveDeps) int {
 	case errors.Is(err, caller.ErrParentMismatch):
 		return write(d, logger, start, "-", protocol.Failure(protocol.Fail(protocol.UnsupportedBrowser)))
 	default:
-		// ErrUnsupported (fuera de macOS) o un lsof que falla: se cierra en falso.
+		// ErrUnsupported (fuera de macOS y Windows) o una consulta del padre que falla: se cierra en falso.
 		return write(d, logger, start, "-", protocol.Failure(protocol.Fail(protocol.Internal)))
 	}
 

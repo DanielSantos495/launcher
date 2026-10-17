@@ -1,6 +1,7 @@
 package install
 
 import (
+	"reflect"
 	"slices"
 	"testing"
 )
@@ -26,7 +27,7 @@ func TestBrowsersPaths(t *testing.T) {
 			ManifestDir: "/h/Library/Application Support/Microsoft Edge/NativeMessagingHosts",
 		},
 	}
-	if got := Browsers("/h"); !slices.Equal(got, want) {
+	if got := Browsers("/h"); !slices.EqualFunc(got, want, func(a, b Browser) bool { return reflect.DeepEqual(a, b) }) {
 		t.Fatalf("Browsers = %+v\nquiero   %+v", got, want)
 	}
 }

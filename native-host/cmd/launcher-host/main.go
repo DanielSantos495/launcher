@@ -62,7 +62,7 @@ func runHost(origin string, stdin io.Reader, stdout io.Writer) int {
 	return serve(serveDeps{
 		ExeDir:  exeDir(),
 		Origin:  origin,
-		PPID:    os.Getppid(),
+		PPID:    caller.ParentPID(),
 		Lookup:  caller.ParentExe,
 		Stdin:   stdin,
 		Stdout:  stdout,
