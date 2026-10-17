@@ -17,7 +17,10 @@
     "test": "pnpm --filter @account-launcher/extension prepare:types && vitest run",
     "coverage": "pnpm --filter @account-launcher/extension prepare:types && vitest run --coverage",
     "build": "pnpm --filter @account-launcher/extension build",
-    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm coverage && pnpm build"
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm coverage && pnpm build",
+    "check:go": "cd native-host && go vet ./... && go test ./...",
+    "check:all": "pnpm check && pnpm check:go",
+    "e2e": "pnpm --filter @account-launcher/extension e2e"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

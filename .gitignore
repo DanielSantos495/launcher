@@ -8,3 +8,5 @@ coverage/
 .wxt/
 dist/
 native-host/bin/
+test-results/
+playwright-report/

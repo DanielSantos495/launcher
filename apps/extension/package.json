@@ -8,7 +8,9 @@
     "typecheck": "wxt prepare && tsc -p tsconfig.json",
     "build": "wxt build && node scripts/check-manifest.mjs",
     "dev": "wxt",
-    "zip": "wxt zip"
+    "zip": "wxt zip",
+    "e2e": "pnpm run build && playwright test",
+    "e2e:install": "playwright install chromium"
   },
   "dependencies": {
     "@account-launcher/core": "workspace:*",
@@ -18,9 +20,11 @@
     "valibot": "1.5.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "@testing-library/dom": "10.4.2",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.7",
+    "@types/node": "26.6.4",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@wxt-dev/module-react": "1.2.2",
