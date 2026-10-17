@@ -1,6 +1,7 @@
 import type { Group, LauncherData } from '@account-launcher/core'
 import type { UiError } from '@account-launcher/protocol'
 import { useId } from 'react'
+import { useClock } from '../clock-context'
 import { useI18n } from '../i18n-context'
 import { buildContext, buildGroup, defaultColor, groupToInput } from '../lib/forms'
 import { useEntityForm } from '../state/useEntityForm'
@@ -18,11 +19,12 @@ interface GroupFormProps {
 
 export function GroupForm({ group, data, onSave, onCancel }: GroupFormProps) {
   const { t } = useI18n()
+  const now = useClock()
   const base = useId()
   const form = useEntityForm({
     initial:
       group === undefined ? { name: '', color: defaultColor(data.groups.length), icon: '' } : groupToInput(group),
-    build: (input) => buildGroup(input, buildContext(data), group),
+    build: (input) => buildGroup(input, buildContext(data, now()), group),
     save: onSave,
   })
   const { input, patch, fieldError } = form
@@ -37,6 +39,7 @@ export function GroupForm({ group, data, onSave, onCancel }: GroupFormProps) {
           <input
             {...fieldAria(`${base}-name`, false, name !== undefined)}
             name="name"
+            spellCheck={false}
             value={input.name}
             autoComplete="off"
             onChange={(event) => {

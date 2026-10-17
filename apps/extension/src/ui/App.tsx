@@ -3,6 +3,7 @@ import { resolveLanguage } from '../i18n/i18n'
 import { downloadText } from '../platform/download'
 import { Dashboard } from './components/Dashboard'
 import type { LauncherClient } from './client'
+import { ClockProvider, type Clock } from './clock-context'
 import { I18nProvider } from './i18n-context'
 import { useLauncher } from './state/useLauncher'
 
@@ -10,10 +11,13 @@ import { useLauncher } from './state/useLauncher'
 export function App({
   client,
   download = downloadText,
+  now = () => new Date(),
 }: {
   readonly client: LauncherClient
   // Guarda un texto como archivo; las pruebas pasan el suyo.
   readonly download?: (filename: string, text: string) => void
+  // Reloj de la interfaz; las pruebas pasan uno fijo. Por defecto, el real.
+  readonly now?: Clock
 }) {
   const launcher = useLauncher(client)
   const settings = launcher.state.data?.settings
@@ -28,8 +32,10 @@ export function App({
   }, [theme])
 
   return (
-    <I18nProvider language={language}>
-      <Dashboard launcher={launcher} download={download} />
-    </I18nProvider>
+    <ClockProvider now={now}>
+      <I18nProvider language={language}>
+        <Dashboard launcher={launcher} download={download} />
+      </I18nProvider>
+    </ClockProvider>
   )
 }

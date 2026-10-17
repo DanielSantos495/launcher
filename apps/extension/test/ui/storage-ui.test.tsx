@@ -72,6 +72,16 @@ describe('medidor de almacenamiento', () => {
     expect(screen.getByRole('meter').getAttribute('aria-valuemax')).toBe(String(MAX_SHARED_DATA_BYTES))
   })
 
+  it('en local la copia de seguridad cuenta para el medidor', async () => {
+    fake = createFakeHost()
+    const backup = dataOfBytes(50_000)
+    const t = createTestEnv({ local: { ...localOf({ identities: [makeIdentity('ana', 'Ana')] }), backup } })
+    const { client } = await openSettings(t)
+    const shown = await storedData(client)
+    const meter = screen.getByRole('meter')
+    expect(meter.getAttribute('aria-valuenow')).toBe(String(jsonBytes(shown) + jsonBytes(backup)))
+  })
+
   it('con datos locales mide contra la cuota de 10 MiB y no avisa del almacén compartido', async () => {
     fake = createFakeHost()
     const t = createTestEnv({ local: localOf({ identities: [makeIdentity('ana', 'Ana')] }) })

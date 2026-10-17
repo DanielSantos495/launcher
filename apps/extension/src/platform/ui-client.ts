@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser'
 import { LOCAL_KEYS } from '../storage/keys'
-import { isRelevantChange, parseInstallation, toUiResponse, type LauncherClient } from '../ui/client'
+import { backupSize, isRelevantChange, parseInstallation, toUiResponse, type LauncherClient } from '../ui/client'
 
 // Cliente del dashboard sobre la API del navegador. Es el único sitio que une la UI con wxt/browser.
 export function createBrowserClient(): LauncherClient {
@@ -22,6 +22,14 @@ export function createBrowserClient(): LauncherClient {
         )
       } catch {
         return undefined
+      }
+    },
+    async backupBytes() {
+      try {
+        const stored = await browser.storage.local.get(LOCAL_KEYS.backup)
+        return backupSize(Object.hasOwn(stored, LOCAL_KEYS.backup) ? stored[LOCAL_KEYS.backup] : undefined)
+      } catch {
+        return 0
       }
     },
     subscribe(listener) {

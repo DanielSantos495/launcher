@@ -9,6 +9,7 @@ import {
 } from '@account-launcher/protocol'
 import * as v from 'valibot'
 import type { SwEnv } from './deps'
+import { toUiError } from './host-client'
 import { getBindings, getData, mutateData, setBinding } from './handlers/data'
 import { capabilitiesGet, hostPing } from './handlers/capabilities'
 import { importData } from './handlers/import'
@@ -110,14 +111,14 @@ export function createRouter(env: SwEnv): (message: unknown, sender: SenderInfo)
         const proof = v.safeParse(WhoamiProveSchema, message)
         if (!proof.success) return failure(uiError('invalid'))
         const proved = await whoamiProve(proof.output, env)
-        return proved.ok ? { ok: true, result: proved.value } : failure(proved.error)
+        return proved.ok ? { ok: true, result: proved.value } : failure(toUiError(proved.error))
       }
       // /whoami.html no puede enviar ningún otro tipo de mensaje.
       if (pathname !== LAUNCHER_PATH) return failure(uiError('invalid', 'sender'))
       const parsed = v.safeParse(UiRequestSchema, message)
       if (!parsed.success) return failure(uiError('invalid'))
       const result = await dispatch(parsed.output.type, parsed.output, env)
-      return result.ok ? { ok: true, result: result.value } : failure(result.error)
+      return result.ok ? { ok: true, result: result.value } : failure(toUiError(result.error))
     } catch {
       return failure(uiError('internal'))
     }

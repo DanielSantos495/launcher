@@ -55,6 +55,8 @@ interface Seed {
   readonly ownProfileDirectory?: string
   // Envuelve el cliente del router (por ejemplo, para hacer fallar una petición concreta).
   readonly wrap?: (client: LauncherClient) => LauncherClient
+  // Reloj de la interfaz (por defecto, el real).
+  readonly now?: () => Date
 }
 
 interface Setup {
@@ -112,7 +114,12 @@ function setup(seed?: Seed): Setup {
         }
   const t = createTestEnv({ ...(local === undefined ? {} : { local }), ...(fake === undefined ? {} : { host: fake }) })
   const client = createRouterClient(t)
-  render(<App client={seed?.wrap === undefined ? client : seed.wrap(client)} />)
+  render(
+    <App
+      client={seed?.wrap === undefined ? client : seed.wrap(client)}
+      {...(seed?.now === undefined ? {} : { now: seed.now })}
+    />,
+  )
   return { t, client, fake, user: userEvent.setup() }
 }
 
@@ -194,6 +201,39 @@ describe('identidades y cuentas', () => {
     expect(label.value).toBe('Mi cuenta')
   })
 
+  it('"Déjala vacía…" solo se ofrece cuando la dirección es opcional, no en una cuenta genérica', async () => {
+    const { user } = setup({ identities: [identity('ana', 'Trabajo')] })
+    await user.click(await screen.findByRole('button', { name: 'Añadir cuenta' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(es['account.url.hint'])).toBeTruthy()
+    await user.selectOptions(within(dialog).getByLabelText('Servicio'), 'Otra web')
+    expect(within(dialog).queryByText(es['account.url.hint'])).toBeNull()
+    expect(within(dialog).getByLabelText('Dirección web').getAttribute('aria-describedby')).toBeNull()
+  })
+
+  it('los campos de dirección, usuario, email y nombre no pasan el corrector ortográfico', async () => {
+    const { user } = setup({ identities: [identity('ana', 'Trabajo')] })
+    await user.click(await screen.findByRole('button', { name: 'Añadir cuenta' }))
+    const account = await screen.findByRole('dialog')
+    expect(
+      within(account)
+        .getByLabelText(/^Dirección web/)
+        .getAttribute('spellcheck'),
+    ).toBe('false')
+    expect(
+      within(account)
+        .getByLabelText(/^Usuario o email/)
+        .getAttribute('spellcheck'),
+    ).toBe('false')
+    await user.click(within(account).getByRole('button', { name: 'Cancelar' }))
+    await user.click(screen.getByRole('button', { name: 'Añadir grupo' }))
+    expect(
+      within(await screen.findByRole('dialog'))
+        .getByLabelText('Nombre')
+        .getAttribute('spellcheck'),
+    ).toBe('false')
+  })
+
   it('una cuenta genérica sin dirección o con javascript: no se guarda', async () => {
     const { user, client } = setup({ identities: [identity('ana', 'Trabajo')] })
     await user.click(await screen.findByRole('button', { name: 'Añadir cuenta' }))
@@ -243,6 +283,43 @@ describe('identidades y cuentas', () => {
     const stored = (await storedData(client)).accounts[0]
     expect(stored?.label).toBe('Omega')
     expect(stored?.username).toBe('anadev')
+  })
+
+  it('la favorita escribe updatedAt con el reloj inyectado', async () => {
+    const fixed = new Date('2027-03-04T05:06:07.000Z')
+    const { user, client } = setup({
+      identities: [identity('ana', 'Trabajo')],
+      accounts: [account('a1', 'ana', 'Alfa')],
+      now: () => fixed,
+    })
+    await user.click(await screen.findByRole('button', { name: 'Favorita: Alfa' }))
+    await waitFor(async () => {
+      expect((await storedData(client)).accounts[0]?.updatedAt).toBe(fixed.toISOString())
+    })
+  })
+
+  it('en Perfil único el menú de una cuenta no ofrece "Abrir como…"', async () => {
+    const { user } = setup({
+      identities: [identity('ana', 'Trabajo'), identity('bea', 'Personal', { order: 1 })],
+      accounts: [account('a1', 'ana', 'Alfa')],
+    })
+    await user.click(await screen.findByRole('button', { name: 'Acciones de Alfa' }))
+    expect(screen.getByRole('menuitem', { name: 'Editar' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: /Abrir como/ })).toBeNull()
+  })
+
+  it('al borrar una cuenta el foco pasa al contenido, porque el botón que abrió el diálogo ya no existe', async () => {
+    const { user } = setup({
+      identities: [identity('ana', 'Trabajo')],
+      accounts: [account('a1', 'ana', 'Alfa'), account('a2', 'ana', 'Beta', { order: 1 })],
+    })
+    await user.click(await screen.findByRole('button', { name: 'Acciones de Alfa' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Borrar' }))
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Borrar cuenta' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Alfa' })).toBeNull()
+    })
+    expect(document.activeElement).toBe(screen.getByRole('main'))
   })
 
   it('borrar una cuenta pide confirmación y la quita', async () => {
@@ -641,6 +718,7 @@ describe('errores de carga y accesibilidad', () => {
     const { user } = setup({
       identities: [identity('ana', 'Trabajo'), identity('bea', 'Personal', { order: 1 })],
       accounts: [account('a1', 'ana', 'Alfa')],
+      mode: 'multi',
     })
     const trigger = await screen.findByRole('button', { name: 'Acciones de Alfa' })
     trigger.focus()

@@ -2,6 +2,7 @@ import type { CustomService, LauncherData } from '@account-launcher/core'
 import type { UiError } from '@account-launcher/protocol'
 import { useId } from 'react'
 import type { MessageKey } from '../../i18n/i18n'
+import { useClock } from '../clock-context'
 import { useI18n } from '../i18n-context'
 import { buildContext, buildCustomService, customServiceToInput } from '../lib/forms'
 import { useEntityForm } from '../state/useEntityForm'
@@ -25,11 +26,12 @@ const MULTI_OPTIONS: readonly (readonly [CustomService['multiAccount'], MessageK
 
 export function CustomServiceForm({ service, data, onSave, onCancel }: CustomServiceFormProps) {
   const { t } = useI18n()
+  const now = useClock()
   const base = useId()
   const form = useEntityForm({
     initial:
       service === undefined ? { name: '', urlTemplate: '', multiAccount: 'none' } : customServiceToInput(service),
-    build: (input) => buildCustomService(input, buildContext(data), service),
+    build: (input) => buildCustomService(input, buildContext(data, now()), service),
     save: onSave,
   })
   const { input, patch, fieldError } = form
@@ -44,6 +46,7 @@ export function CustomServiceForm({ service, data, onSave, onCancel }: CustomSer
           <input
             {...fieldAria(`${base}-name`, false, name !== undefined)}
             name="name"
+            spellCheck={false}
             value={input.name}
             autoComplete="off"
             onChange={(event) => {

@@ -82,6 +82,7 @@ export function TemporaryContainerDialog({
             <input
               {...fieldAria(`${base}-url`, false, urlError !== undefined)}
               name="url"
+              spellCheck={false}
               type="url"
               inputMode="url"
               autoComplete="off"
@@ -101,6 +102,7 @@ export function TemporaryContainerDialog({
           <input
             {...fieldAria(`${base}-name`, true, nameError !== undefined)}
             name="name"
+            spellCheck={false}
             autoComplete="off"
             value={name}
             onChange={(event) => {

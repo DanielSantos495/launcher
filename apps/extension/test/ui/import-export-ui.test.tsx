@@ -8,6 +8,7 @@ import {
 } from '@account-launcher/core'
 import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { LauncherClient } from '../../src/ui/client'
 import { buildExport, readImportText } from '../../src/ui/lib/import-export'
 import { createTestEnv } from '../helpers/env'
 import { createFakeHost, type FakeHost } from '../helpers/fake-host'
@@ -30,6 +31,7 @@ function copyWith(accounts: Account[]): LauncherData {
 }
 
 interface OpenOptions {
+  readonly wrap?: (client: LauncherClient) => LauncherClient
   readonly mode?: 'single' | 'multi'
   readonly fake?: FakeHost
   readonly failImport?: boolean
@@ -48,7 +50,11 @@ async function openSettings(options: OpenOptions = {}) {
   })
   const mounted = mount(t, {
     download,
-    ...(options.failImport === true ? { wrap: (client) => failing(client, (r) => r.type === 'data.import') } : {}),
+    ...(options.failImport === true
+      ? { wrap: (client: LauncherClient) => failing(client, (r) => r.type === 'data.import') }
+      : options.wrap === undefined
+        ? {}
+        : { wrap: options.wrap }),
   })
   await screen.findByRole('heading', { name: 'Trabajo' })
   await mounted.user.click(screen.getByRole('button', { name: 'Configuración' }))
@@ -236,6 +242,39 @@ describe('importar: archivo válido', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Fusionar' }))
     expect((await within(dialog).findByRole('alert')).textContent).toContain('No se pudo guardar en el navegador')
     expect(screen.queryByText(/Importación terminada/)).toBeNull()
+  })
+})
+
+describe('importar: Escape con la importación en curso', () => {
+  const incoming = (): string =>
+    exportText(copyWith([makeAccount('a1', 'ana', 'Alfa'), makeAccount('a2', 'ana', 'Beta')]))
+
+  it('no cierra el diálogo mientras se guarda; al terminar, la importación se anuncia', async () => {
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const { user, client } = await openSettings({
+      wrap: (inner) => ({
+        ...inner,
+        async send(request) {
+          if (request.type === 'data.import') await gate
+          return inner.send(request)
+        },
+      }),
+    })
+    await user.upload(fileInput(), file(incoming()))
+    const dialog = await screen.findByRole('dialog', { name: 'Importar copia' })
+    await user.click(within(dialog).getByRole('button', { name: 'Fusionar' }))
+    await within(dialog).findByText('Importando…')
+
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('dialog', { name: 'Importar copia' })).toBe(dialog)
+
+    release()
+    expect(await screen.findByText(/Importación terminada/)).toBeTruthy()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect((await storedData(client)).accounts).toHaveLength(3)
   })
 })
 

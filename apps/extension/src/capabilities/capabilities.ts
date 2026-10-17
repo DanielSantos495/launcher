@@ -20,12 +20,14 @@ function withoutHost(mode: Mode, reason: UnavailableReason): Capabilities {
   }
 }
 
-// Un host antiguo (versión de protocolo distinta o respuesta fuera del contrato) pide actualizarlo; todo lo demás
-// (no instalado, sin permiso, sin respuesta a tiempo, terminado o con un error inesperado) pide instalarlo.
+// Solo "no instalado / sin permiso" (host_missing), "sin respuesta a tiempo" y "terminado" piden instalarlo; cualquier
+// otra respuesta (versión de protocolo distinta, fuera del contrato o con un código que un ping no debería dar) viene de
+// un host que no encaja con esta extensión, y lo que corresponde es actualizarlo.
 function reasonFor(error: HostCallError): UnavailableReason {
-  const outdated =
-    error.code === 'unsupported_version' || (error.code === 'host_error' && error.hint === 'bad_response')
-  return outdated ? 'host_outdated' : 'host_missing'
+  const missing =
+    error.code === 'host_missing' ||
+    (error.code === 'host_error' && (error.hint === 'timeout' || error.hint === 'host_failed'))
+  return missing ? 'host_missing' : 'host_outdated'
 }
 
 // Capacidades del momento (§1, §8): en "Perfil único" no se pregunta al host (nada que instalar); en "Varios perfiles"

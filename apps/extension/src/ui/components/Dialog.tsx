@@ -9,7 +9,7 @@ interface DialogProps {
 }
 
 // <dialog> nativo en modal: el navegador atrapa el foco y deja inerte el resto. Se monta solo mientras está abierto;
-// al desmontarse se cierra y el foco vuelve al elemento que lo abrió.
+// al desmontarse se cierra y el foco vuelve al elemento que lo abrió (o, si ya no existe, al contenido principal).
 export function Dialog({ title, onClose, children, bare = false }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
   const titleId = useId()
@@ -25,7 +25,9 @@ export function Dialog({ title, onClose, children, bare = false }: DialogProps) 
     }
     return () => {
       dialog.close()
+      // Si quien lo abrió ya no existe (se borró, o era el botón del estado vacío), el foco pasa al contenido principal.
       if (opener?.isConnected === true) opener.focus()
+      else document.querySelector<HTMLElement>('main[tabindex="-1"]')?.focus()
     }
   }, [])
 

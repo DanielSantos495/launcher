@@ -70,6 +70,7 @@ function createFake(options: FakeOptions = {}): Fake {
       return Promise.resolve(toUiResponse<typeof request>(answer(request.type)))
     },
     installation: () => Promise.resolve(INSTALLATION),
+    backupBytes: () => Promise.resolve(0),
     subscribe(listener) {
       listeners.add(listener)
       return () => {

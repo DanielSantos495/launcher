@@ -1,3 +1,5 @@
+import * as v from 'valibot'
+
 // Caracteres de control C0, DEL y C1: nunca son válidos en nombres, URLs ni carpetas (T2).
 // `allowed` permite excepciones concretas, como el salto de línea en las notas.
 export function hasControlChars(s: string, allowed = ''): boolean {
@@ -17,3 +19,6 @@ const LONE_SURROGATE = /\p{Cs}/u
 export function isWellFormed(s: string): boolean {
   return !LONE_SURROGATE.test(s)
 }
+
+// Acción de esquema compartida: rechaza un texto con sustitutos sueltos con un mismo mensaje en todo el modelo.
+export const wellFormed = v.check(isWellFormed, 'texto mal formado')

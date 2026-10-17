@@ -24,6 +24,11 @@ try {
   console.error(`check-manifest: no se pudo leer ${manifestPath}`)
   process.exit(1)
 }
+// JSON válido pero no un objeto (null, array, número, texto): sin esto, las lecturas de abajo lanzarían un TypeError.
+if (typeof manifest !== 'object' || manifest === null || Array.isArray(manifest)) {
+  console.error('check-manifest: el manifest debe ser un objeto')
+  process.exit(1)
+}
 
 const permissions = Array.isArray(manifest.permissions) ? [...manifest.permissions].sort() : undefined
 if (permissions === undefined || JSON.stringify(permissions) !== JSON.stringify(ALLOWED_PERMISSIONS)) {

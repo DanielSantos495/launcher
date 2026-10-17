@@ -66,9 +66,10 @@ function importMessage(data: LauncherData, mode: 'merge' | 'replace', hints?: re
 const fakes: FakeHost[] = []
 
 afterEach(() => {
+  // Se vacía la lista antes de comprobar: si un expect falla, los falsos no pasan a la prueba siguiente.
+  const used = fakes.splice(0)
   // Ninguna petición al host puede salirse del contrato.
-  for (const fake of fakes) expect(fake.invalidRequests).toBe(0)
-  fakes.length = 0
+  for (const fake of used) expect(fake.invalidRequests).toBe(0)
 })
 
 function newHost(options?: FakeHostOptions): FakeHost {
@@ -156,6 +157,14 @@ describe('data.import local', () => {
     expect(Object.keys(t.local.dump())).not.toContain('backup')
   })
 
+  it('merge que se pasa por una sola identidad (LIMITS.identities + 1) es import_invalid', async () => {
+    const t = createTestEnv({ local: unpairedLocal('inst-a', dataOf({ identities: numbered('c', 60) })) })
+    const response = await t.route(
+      importMessage(dataOf({ identities: numbered('n', LIMITS.identities - 60 + 1) }), 'merge'),
+    )
+    expect(response).toEqual({ ok: false, error: { code: 'invalid', hint: 'import_invalid' } })
+  })
+
   it('merge que llega justo a LIMITS.identities es válido', async () => {
     const t = createTestEnv({ local: unpairedLocal('inst-a', dataOf({ identities: numbered('c', 60) })) })
     const response = await t.route(
@@ -176,6 +185,8 @@ describe('data.import local', () => {
 
     expect(response).toEqual({ ok: false, error: { code: 'internal', hint: 'storage_write' } })
     expect(t.local.dump().localData).toEqual(current)
+    // La copia de seguridad sí quedó escrita: es lo que permite deshacer.
+    expect(t.local.dump().backup).toMatchObject({ source: 'local', data: current })
   })
 
   it('si no se puede guardar la copia, no se confirma nada: storage_write y los datos siguen igual', async () => {

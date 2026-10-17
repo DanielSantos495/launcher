@@ -303,6 +303,18 @@ describe('SharedStore.write', () => {
     expect(fake.state.store?.revision).toBe(3)
   })
 
+  it('si falla guardar la caché tras escribir, la caché anterior se borra y no queda una revisión vieja', async () => {
+    const { t, store } = setup({ revision: 2, data: createEmptyData(), bindings: {} })
+    await store.read()
+    expect(t.session.dump().shared).toMatchObject({ hostRevision: 2 })
+    t.session.failNextSet()
+    expect((await store.write(applying(ops(putIdentity('bea'))))).ok).toBe(true)
+    expect(t.session.dump()).toEqual({})
+    // La siguiente lectura va al host y ve la revisión nueva.
+    const read = await store.read()
+    expect(read.ok && read.value.data.identities.map((i) => i.id)).toContain('bea')
+  })
+
   it('con un conflicto reaplica sobre lo último: quedan la cuenta de B y la identidad de A', async () => {
     const base = { ...dataWith('multi', ['base']), revision: 1 }
     const { fake, store } = setup({ revision: 1, data: base, bindings: {} })

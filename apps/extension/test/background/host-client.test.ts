@@ -98,8 +98,8 @@ describe('HostClient.call: petición', () => {
     const atLimit = putOfSize(MAX_HOST_REQUEST_BYTES)
     expect(jsonBytes(hostRequest('sync.put', atLimit))).toBe(MAX_HOST_REQUEST_BYTES)
     const sentCase = setup()
-    // Se envía: el falso responde por el token (desconocido), no el cliente por el tamaño.
-    expect(await sentCase.client.call('sync.put', atLimit)).toEqual({ ok: false, error: { code: 'not_paired' } })
+    // Se envía: responde el host (sin pista, y antes que por el token, como el real) y no el cliente por el tamaño.
+    expect(await sentCase.client.call('sync.put', atLimit)).toEqual({ ok: false, error: { code: 'too_large' } })
     expect(sentCase.fake.requests).toHaveLength(1)
 
     const over = putOfSize(MAX_HOST_REQUEST_BYTES + 1)

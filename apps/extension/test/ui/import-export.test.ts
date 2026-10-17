@@ -102,7 +102,7 @@ describe('readImportText', () => {
 
   it('acepta un texto válido y lo mismo con un BOM inicial', () => {
     expect(readImportText(text).ok).toBe(true)
-    expect(readImportText('﻿' + text).ok).toBe(true)
+    expect(readImportText('\uFEFF' + text).ok).toBe(true)
   })
 
   it('un texto que no es JSON es invalid_json', () => {
@@ -119,6 +119,10 @@ describe('readImportText', () => {
     const read = readImportText(hostile)
     expect(read).toEqual({ ok: false, error: { code: 'invalid', issues: ['accounts.a1: URL no válida'] } })
     expect(JSON.stringify(read)).not.toContain('javascript')
+  })
+
+  it('un texto de exactamente 5 MB no es too_large (aquí no es JSON)', () => {
+    expect(readImportText('a'.repeat(MAX_IMPORT_BYTES))).toEqual({ ok: false, error: { code: 'invalid_json' } })
   })
 
   it('un texto de más de 5 MB es too_large', () => {

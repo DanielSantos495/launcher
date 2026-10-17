@@ -260,12 +260,13 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
           const { revision, data, bindings } = store()
           return success('sync.get', { revision, data: structuredClone(data), bindings: structuredClone(bindings) })
         })
-      case 'sync.put':
+      case 'sync.put': {
+        // Como el host real: el tamaño se mide antes que el token y la revisión.
+        const { baseRevision, data, bindings } = request.args
+        if (jsonBytes(data) > MAX_SHARED_DATA_BYTES || jsonBytes(bindings) > MAX_SHARED_BINDINGS_BYTES) {
+          return failure('too_large')
+        }
         return authed(request.args.token, () => {
-          const { baseRevision, data, bindings } = request.args
-          if (jsonBytes(data) > MAX_SHARED_DATA_BYTES || jsonBytes(bindings) > MAX_SHARED_BINDINGS_BYTES) {
-            return failure('too_large')
-          }
           const current = store()
           if (baseRevision !== current.revision) return failure('conflict', current.revision)
           current.revision++
@@ -273,6 +274,7 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
           current.bindings = structuredClone(bindings)
           return success('sync.put', { revision: current.revision })
         })
+      }
       case 'icons.get':
       case 'icons.put':
       case 'icons.delete':

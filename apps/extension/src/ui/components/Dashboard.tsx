@@ -1,7 +1,8 @@
-import type { Account, Op } from '@account-launcher/core'
+import type { Account, Identity, Op } from '@account-launcher/core'
 import type { UiError } from '@account-launcher/protocol'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MessageKey } from '../../i18n/i18n'
+import { useClock } from '../clock-context'
 import { useI18n } from '../i18n-context'
 import { isStoreFull, loadProblem } from '../lib/data-problem'
 import { boardIndex, orderedIdentities, viewSections, warningsIndex } from '../lib/sections'
@@ -19,6 +20,7 @@ import { SettingsView } from './SettingsView'
 import { Toasts, type ToastItem } from './Toasts'
 
 const NO_WARNINGS: ReadonlyMap<string, readonly Account[]> = new Map()
+const NO_IDENTITIES: readonly Identity[] = []
 
 interface DashboardProps {
   readonly launcher: Launcher
@@ -30,6 +32,7 @@ interface DashboardProps {
 // hooks van antes de los retornos anticipados (carga y error) para respetar el orden de llamadas.
 export function Dashboard({ launcher, download }: DashboardProps) {
   const { t } = useI18n()
+  const now = useClock()
   const { state, mutate, send, reload } = launcher
   const { data, bindings, profiles } = state
   const [dialog, setDialog] = useState<DialogState | undefined>(undefined)
@@ -136,7 +139,7 @@ export function Dashboard({ launcher, download }: DashboardProps) {
         void mutateWithNotice([
           {
             type: 'account.put',
-            account: { ...account, favorite: !account.favorite, updatedAt: new Date().toISOString() },
+            account: { ...account, favorite: !account.favorite, updatedAt: now().toISOString() },
           },
         ])
       },
@@ -154,7 +157,7 @@ export function Dashboard({ launcher, download }: DashboardProps) {
           }
         : {}),
     }),
-    [openAccount, mutateWithNotice, temporaryAvailable],
+    [openAccount, mutateWithNotice, temporaryAvailable, now],
   )
   const sectionActions = useMemo<SectionActions>(
     () => ({
@@ -239,7 +242,8 @@ export function Dashboard({ launcher, download }: DashboardProps) {
         view={view}
         showDestinations={data.settings.mode === 'multi'}
         index={index}
-        identities={identities}
+        // "Abrir como…" solo tiene sentido en Varios perfiles; en Perfil único equivaldría a un clic normal.
+        identities={data.settings.mode === 'multi' ? identities : NO_IDENTITIES}
         warnings={warnings}
         tileActions={tileActions}
         sectionActions={sectionActions}

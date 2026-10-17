@@ -96,6 +96,13 @@ describe('account.open con perfil de Chromium', () => {
     expect(lastOpenedAt(t, 'gh')).toBe(DEFAULT_NOW)
   })
 
+  it('un conflict del host con revisión llega a la UI solo con el código', async () => {
+    const { t, fake } = setup()
+    fake.override = () => ({ ok: false, error: { code: 'conflict', revision: 7 } })
+    expect(await t.route({ type: 'account.open', accountId: 'gh' })).toEqual({ ok: false, error: { code: 'conflict' } })
+    expect(await t.route({ type: 'profiles.list' })).toEqual({ ok: false, error: { code: 'conflict' } })
+  })
+
   it('contextOverride current abre en el navegador actual; "Abrir como…" gana y abre en el perfil', async () => {
     const { t, fake } = setup()
     expect(await t.route({ type: 'account.open', accountId: 'gh-cur' })).toEqual({

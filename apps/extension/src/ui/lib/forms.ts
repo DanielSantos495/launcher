@@ -60,9 +60,9 @@ export interface CustomServiceInput {
   readonly multiAccount: string
 }
 
-// Contexto de construcción con el reloj y el generador de ids reales (las pruebas pasan los suyos).
-export function buildContext(data: LauncherData): BuildContext {
-  return { now: new Date(), newId: () => crypto.randomUUID(), data }
+// Contexto de construcción con el instante dado (el reloj de la interfaz) y el generador de ids reales.
+export function buildContext(data: LauncherData, now: Date): BuildContext {
+  return { now, newId: () => crypto.randomUUID(), data }
 }
 
 const MAX_ORDER = 1_000_000

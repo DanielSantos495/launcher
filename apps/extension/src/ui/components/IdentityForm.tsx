@@ -1,6 +1,7 @@
 import type { Identity, LauncherData } from '@account-launcher/core'
 import type { UiError } from '@account-launcher/protocol'
 import { useId } from 'react'
+import { useClock } from '../clock-context'
 import { useI18n } from '../i18n-context'
 import { buildContext, buildIdentity, defaultColor, identityToInput } from '../lib/forms'
 import { useEntityForm } from '../state/useEntityForm'
@@ -18,13 +19,14 @@ interface IdentityFormProps {
 
 export function IdentityForm({ identity, data, onSave, onCancel }: IdentityFormProps) {
   const { t } = useI18n()
+  const now = useClock()
   const base = useId()
   const form = useEntityForm({
     initial:
       identity === undefined
         ? { label: '', email: '', color: defaultColor(data.identities.length) }
         : identityToInput(identity),
-    build: (input) => buildIdentity(input, buildContext(data), identity),
+    build: (input) => buildIdentity(input, buildContext(data, now()), identity),
     save: onSave,
   })
   const { input, patch, fieldError } = form
@@ -50,6 +52,7 @@ export function IdentityForm({ identity, data, onSave, onCancel }: IdentityFormP
           <input
             {...fieldAria(`${base}-email`, false, email !== undefined)}
             name="email"
+            spellCheck={false}
             type="email"
             value={input.email}
             autoComplete="off"

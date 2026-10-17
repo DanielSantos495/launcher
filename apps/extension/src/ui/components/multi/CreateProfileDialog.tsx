@@ -59,6 +59,7 @@ export function CreateProfileDialog({ identity, send, onCreated, onCancel }: Cre
           <input
             {...fieldAria(`${base}-name`, true, nameError !== undefined)}
             name="name"
+            spellCheck={false}
             value={name}
             autoComplete="off"
             onChange={(event) => {

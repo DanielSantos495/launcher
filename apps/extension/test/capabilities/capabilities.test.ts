@@ -71,12 +71,15 @@ describe('getCapabilities', () => {
     expect(caps.providers).toStrictEqual(unavailable('host_missing'))
   })
 
-  it('otro error del host al hacer ping: host_missing', async () => {
-    const { caps } = await multi(undefined, (f) => {
-      f.override = () => ({ ok: false, error: { code: 'internal' } })
-    })
-    expect(caps.providers).toStrictEqual(unavailable('host_missing'))
-  })
+  it.each(['internal', 'bad_request', 'not_paired', 'too_large'] as const)(
+    'un código inesperado del host (%s) al hacer ping: host_outdated, no host_missing',
+    async (code) => {
+      const { caps } = await multi(undefined, (f) => {
+        f.override = () => ({ ok: false, error: { code } })
+      })
+      expect(caps.providers).toStrictEqual(unavailable('host_outdated'))
+    },
+  )
 
   it('unsupported_version: host_outdated', async () => {
     const { caps } = await multi(undefined, (f) => {

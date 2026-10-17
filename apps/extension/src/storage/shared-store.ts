@@ -66,11 +66,16 @@ export function createSharedStore(env: {
   }
 
   // La caché es una optimización: si la sesión no deja escribirla, la operación sigue y la próxima lectura irá al host.
+  // Se borra la anterior: dejarla serviría una revisión vieja como si fuera la actual.
   async function writeCache(cache: SharedCache): Promise<void> {
     try {
       await deps.session.set({ [SESSION_KEYS.shared]: cache })
     } catch {
-      return
+      try {
+        await deps.session.remove([SESSION_KEYS.shared])
+      } catch {
+        return
+      }
     }
   }
 

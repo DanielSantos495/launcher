@@ -8,6 +8,7 @@ import {
 import * as v from 'valibot'
 import { InstallationSchema } from '../storage/installation'
 import { LOCAL_KEYS, SESSION_KEYS } from '../storage/keys'
+import { jsonBytes } from '../storage/usage'
 
 export interface InstallationView {
   readonly installationId: string
@@ -21,6 +22,7 @@ export interface InstallationView {
 export interface LauncherClient {
   send<R extends UiRequest>(request: R): Promise<UiResponse<UiResults[R['type']]>>
   installation(): Promise<InstallationView | undefined> // lee y valida LOCAL_KEYS.installation (InstallationSchema)
+  backupBytes(): Promise<number> // bytes UTF-8 del JSON de LOCAL_KEYS.backup; 0 si no hay o no se puede leer
   subscribe(listener: () => void): () => void // storage.onChanged: localData, localBindings, installation, shared
 }
 
@@ -49,9 +51,14 @@ export function parseInstallation(raw: unknown): InstallationView | undefined {
   return parsed.success ? parsed.output : undefined
 }
 
+// Bytes que ocupa lo guardado como copia de seguridad (0 si no hay): cuentan para la cuota de storage.local.
+export function backupSize(raw: unknown): number {
+  return raw === undefined ? 0 : jsonBytes(raw)
+}
+
 // Claves de storage cuyo cambio puede alterar lo que muestra el dashboard.
 const WATCHED: Readonly<Record<'local' | 'session', ReadonlySet<string>>> = {
-  local: new Set([LOCAL_KEYS.localData, LOCAL_KEYS.localBindings, LOCAL_KEYS.installation]),
+  local: new Set([LOCAL_KEYS.localData, LOCAL_KEYS.localBindings, LOCAL_KEYS.installation, LOCAL_KEYS.backup]),
   session: new Set([SESSION_KEYS.shared]),
 }
 

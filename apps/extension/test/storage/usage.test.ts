@@ -63,6 +63,13 @@ describe('storeUsage', () => {
     expect(accented - plain).toBe(100)
   })
 
+  it('en local cuenta también la copia de seguridad; en el almacén compartido se ignora', () => {
+    const data = createEmptyData()
+    expect(storeUsage(data, 'local', 1000).bytes).toBe(jsonBytes(data) + 1000)
+    expect(storeUsage(data, 'local', 1000).ratio).toBe((jsonBytes(data) + 1000) / 10_485_760)
+    expect(storeUsage(data, 'shared', 1000).bytes).toBe(jsonBytes(data))
+  })
+
   it('en local el límite es la cuota de 10 MiB de storage.local', () => {
     const usage = storeUsage(createEmptyData(), 'local')
     expect(usage.limit).toBe(10_485_760)

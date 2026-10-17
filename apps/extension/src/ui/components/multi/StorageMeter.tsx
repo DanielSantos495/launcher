@@ -7,13 +7,15 @@ import { formatKb } from '../../lib/format'
 interface StorageMeterProps {
   readonly data: LauncherData
   readonly source: 'local' | 'shared'
+  // Bytes de la copia de seguridad: en local ocupa la misma cuota que los datos.
+  readonly backupBytes?: number
 }
 
 // Cuánto ocupan los datos frente al límite de donde viven. La barra es un medidor accesible (role="meter") y el estado
 // no depende del color: el texto dice cuánto es y, en el almacén compartido, avisa cuando se llena.
-export function StorageMeter({ data, source }: StorageMeterProps) {
+export function StorageMeter({ data, source, backupBytes = 0 }: StorageMeterProps) {
   const { t, language } = useI18n()
-  const usage = useMemo(() => storeUsage(data, source), [data, source])
+  const usage = useMemo(() => storeUsage(data, source, backupBytes), [data, source, backupBytes])
   const text = t('storage.usage', {
     used: formatKb(language, usage.bytes, 1),
     limit: formatKb(language, usage.limit, 1),

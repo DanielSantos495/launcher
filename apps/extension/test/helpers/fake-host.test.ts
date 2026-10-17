@@ -416,6 +416,30 @@ describe('el host falso: emparejamiento y datos compartidos', () => {
     expect(fake.state.store?.revision).toBe(1)
   })
 
+  it('sync.put mide el tamaño antes que el token y la revisión, como el host real', async () => {
+    const fake = createFakeHost()
+    const notes = 'n'.repeat(2000)
+    const accounts = Array.from({ length: 300 }, (_, i) => ({
+      id: `a${String(i)}`,
+      identityId: 'ana',
+      groupId: null,
+      serviceId: 'github' as const,
+      label: 'x',
+      notes,
+      icon: { type: 'auto' as const },
+      favorite: false,
+      order: 0,
+      createdAt: '2026-10-01T10:00:00.000Z',
+      updatedAt: '2026-10-01T10:00:00.000Z',
+    }))
+    const data = { ...createEmptyData(), accounts }
+    // Token que no está emparejado y revisión que no coincide: el tamaño gana a los dos.
+    expect(await call(fake, 'sync.put', { token: 'B'.repeat(43), baseRevision: 7, data, bindings: {} })).toEqual({
+      ok: false,
+      error: { code: 'too_large' },
+    })
+  })
+
   it('una sesión con los 14 comandos de F1 termina sin que el falso lance', async () => {
     const fake = createFakeHost()
     let issued = ''

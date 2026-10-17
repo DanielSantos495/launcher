@@ -144,6 +144,25 @@ describe('account.open en el navegador actual', () => {
     expect(storedAccount(t, 'mail')?.lastOpenedAt).toBeUndefined()
   })
 
+  it('si la cuenta se borra entre la apertura y el toque, la apertura sigue bien y no se escribe nada', async () => {
+    const t = createTestEnv({
+      local: seed({ identities: [identity('ana', 'ana@example.com')], accounts: [account('mail', 'ana')] }),
+    })
+    const openTab = t.deps.openTab
+    vi.spyOn(t.deps, 'openTab').mockImplementation(async (url) => {
+      await openTab(url)
+      // Otra instalación (u otra pestaña) borra la cuenta justo después de abrirla.
+      const stored = loadData(t.local.dump().localData)
+      if (!stored.ok) throw new Error('datos locales no válidos')
+      await t.local.set({ localData: { ...stored.value, accounts: [], revision: stored.value.revision + 1 } })
+    })
+    const response = await t.route({ type: 'account.open', accountId: 'mail' })
+    expect(response).toEqual({ ok: true, result: { provider: 'current' } })
+    expect(storedAccount(t, 'mail')).toBeUndefined()
+    const after = loadData(t.local.dump().localData)
+    expect(after.ok && after.value.accounts).toEqual([])
+  })
+
   it('un error de lectura en el toque tampoco cambia el resultado', async () => {
     const t = createTestEnv({
       local: seed({ identities: [identity('ana', 'ana@example.com')], accounts: [account('mail', 'ana')] }),

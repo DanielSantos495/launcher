@@ -10,6 +10,8 @@ export interface LauncherState {
   readonly source?: 'local' | 'shared'
   readonly bindings: Bindings
   readonly installation?: InstallationView
+  // Bytes de la copia de seguridad guardada en storage.local; cuentan para el medidor de almacenamiento local.
+  readonly backupBytes?: number
   readonly capabilities?: Capabilities
   readonly profiles: readonly ProfileInfo[]
 }
@@ -55,10 +57,11 @@ export function useLauncher(client: LauncherClient): Launcher {
   // Datos, vínculos e instalación. Si data.get falla, el estado pasa a error con su código.
   const loadCore = useCallback(async (): Promise<void> => {
     const seq = ++coreSeq.current
-    const [data, bindings, installation] = await Promise.all([
+    const [data, bindings, installation, backupBytes] = await Promise.all([
       client.send({ type: 'data.get' }),
       client.send({ type: 'bindings.get' }),
       client.installation(),
+      client.backupBytes(),
     ])
     if (isStale(alive, coreSeq, seq)) return
     // Con el error también se guarda la instalación: decide qué aviso se enseña (¿está emparejada?).
@@ -78,6 +81,7 @@ export function useLauncher(client: LauncherClient): Launcher {
       source: data.result.source,
       bindings: bindings.result.bindings,
       installation,
+      backupBytes,
     }))
   }, [client, commit])
 

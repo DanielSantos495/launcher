@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isRelevantChange, parseInstallation, toUiResponse } from '../../src/ui/client'
+import { backupSize, isRelevantChange, parseInstallation, toUiResponse } from '../../src/ui/client'
 
 describe('toUiResponse', () => {
   it('deja pasar una respuesta correcta con su resultado', () => {
@@ -59,6 +59,7 @@ describe('isRelevantChange', () => {
     ['local', ['localData']],
     ['local', ['localBindings']],
     ['local', ['installation']],
+    ['local', ['backup']],
     ['local', ['pairing', 'installation']],
     ['session', ['shared']],
   ])('%s %j importa', (area, keys) => {
@@ -67,7 +68,6 @@ describe('isRelevantChange', () => {
 
   it.each([
     ['local', ['pairing']],
-    ['local', ['backup']],
     ['local', ['shared']],
     ['session', ['localData']],
     ['sync', ['localData']],
@@ -75,5 +75,12 @@ describe('isRelevantChange', () => {
     ['local', []],
   ])('%s %j no importa', (area, keys) => {
     expect(isRelevantChange(area, keys)).toBe(false)
+  })
+})
+
+describe('backupSize', () => {
+  it('sin copia son 0 bytes; con copia, los bytes UTF-8 de su JSON', () => {
+    expect(backupSize(undefined)).toBe(0)
+    expect(backupSize({ a: 'é' })).toBe(10)
   })
 })

@@ -1,6 +1,7 @@
 import { CATALOG, type Account, type LauncherData } from '@account-launcher/core'
 import type { UiError } from '@account-launcher/protocol'
 import { useId, useMemo } from 'react'
+import { useClock } from '../clock-context'
 import { useI18n } from '../i18n-context'
 import { accountToInput, buildAccount, buildContext } from '../lib/forms'
 import { orderedGroups, orderedIdentities } from '../lib/sections'
@@ -25,6 +26,7 @@ const FIRST_SERVICE = CATALOG[0]?.id ?? 'generic'
 
 export function AccountForm({ account, data, identityId, groupId, ownIdentityId, onSave, onCancel }: AccountFormProps) {
   const { t } = useI18n()
+  const now = useClock()
   const base = useId()
   const identities = useMemo(() => orderedIdentities(data, ownIdentityId), [data, ownIdentityId])
   const groups = useMemo(() => orderedGroups(data), [data])
@@ -57,7 +59,7 @@ export function AccountForm({ account, data, identityId, groupId, ownIdentityId,
             contextOverride: '',
           }
         : accountToInput(account),
-    build: (input) => buildAccount(input, buildContext(data), account),
+    build: (input) => buildAccount(input, buildContext(data, now()), account),
     save: onSave,
   })
   const { input, patch, fieldError } = form
@@ -127,12 +129,13 @@ export function AccountForm({ account, data, identityId, groupId, ownIdentityId,
         <Field
           id={`${base}-url`}
           label={t(input.serviceId === 'generic' ? 'account.url.required' : 'account.url')}
-          hint={t('account.url.hint')}
+          {...(input.serviceId === 'generic' ? {} : { hint: t('account.url.hint') })}
           error={url}
         >
           <input
-            {...fieldAria(`${base}-url`, true, url !== undefined)}
+            {...fieldAria(`${base}-url`, input.serviceId !== 'generic', url !== undefined)}
             name="url"
+            spellCheck={false}
             type="url"
             value={input.url}
             autoComplete="off"
@@ -146,6 +149,7 @@ export function AccountForm({ account, data, identityId, groupId, ownIdentityId,
           <input
             {...fieldAria(`${base}-username`, false, username !== undefined)}
             name="username"
+            spellCheck={false}
             value={input.username}
             autoComplete="off"
             onChange={(event) => {

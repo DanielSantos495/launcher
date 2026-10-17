@@ -2,6 +2,7 @@ import type { Bindings, ExportFile, ImportError, LauncherData, ProfileInfo } fro
 import type { UiError, UiResults } from '@account-launcher/protocol'
 import { useId, useState, type ChangeEvent } from 'react'
 import type { MessageKey } from '../../i18n/i18n'
+import { useClock } from '../clock-context'
 import { useI18n } from '../i18n-context'
 import { BINDINGS_SECTION_ID } from '../lib/anchors'
 import { formatList } from '../lib/format'
@@ -43,6 +44,7 @@ const COUNT_LABELS = [
 // nada; los problemas que se muestran ya vienen saneados (solo ruta y tipo de regla, como mucho 50).
 export function ImportExport({ data, bindings, profiles, send, reload, download }: ImportExportProps) {
   const { t, language } = useI18n()
+  const now = useClock()
   const [problem, setProblem] = useState<ImportError | undefined>()
   const [preview, setPreview] = useState<Preview | undefined>()
   const [result, setResult] = useState<
@@ -50,7 +52,7 @@ export function ImportExport({ data, bindings, profiles, send, reload, download 
   >()
 
   const exportCopy = (): void => {
-    const { filename, text } = buildExport(data, bindings, profiles, new Date())
+    const { filename, text } = buildExport(data, bindings, profiles, now())
     download(filename, text)
   }
 
@@ -182,6 +184,11 @@ function ImportProblem({ problem }: { readonly problem: ImportError }) {
   )
 }
 
+// Cierre ignorado mientras hay una importación en curso.
+function ignore(): void {
+  return
+}
+
 interface ImportDialogProps {
   readonly preview: Preview
   readonly revision: number
@@ -213,7 +220,8 @@ function ImportDialog({ preview, revision, send, onCancel, onDone }: ImportDialo
   }
 
   return (
-    <Dialog title={t('import.title')} onClose={onCancel}>
+    // Con una importación en curso, Escape no cierra el diálogo: la respuesta llegaría a un diálogo ya cerrado.
+    <Dialog title={t('import.title')} onClose={pending === undefined ? onCancel : ignore}>
       <p className="dialog__message">{t('import.intro')}</p>
       {(['merge', 'replace'] as const).map((mode) => (
         <ImportMode

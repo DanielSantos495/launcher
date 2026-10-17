@@ -1,5 +1,6 @@
 import { searchAccounts, type Account, type LauncherData } from '@account-launcher/core'
 import { useDeferredValue, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useClock } from '../clock-context'
 import { useI18n } from '../i18n-context'
 import type { BoardIndex } from '../lib/sections'
 import { DestinationLabel } from './DestinationLabel'
@@ -23,13 +24,14 @@ const MAX_RESULTS = 50
 // regulares con la consulta.
 export function CommandPalette({ data, index, showDestinations, onOpen, onClose }: CommandPaletteProps) {
   const { t, tp } = useI18n()
+  const now = useClock()
   const [query, setQuery] = useState('')
   // La consulta se aplaza para que escribir no espere a repintar la lista.
   const deferredQuery = useDeferredValue(query)
   // Posición pedida por el teclado; la activa se acota al número de resultados (que cambia al escribir).
   const [cursor, setCursor] = useState(0)
   // Instante de apertura: fija "abierta hace poco" mientras la paleta está abierta.
-  const [openedAt] = useState(() => new Date())
+  const [openedAt] = useState(() => now())
   const listId = useId()
   const listRef = useRef<HTMLUListElement>(null)
 

@@ -71,7 +71,7 @@ describe('router: remitente', () => {
   it('acepta el launcher con hash o consulta', async () => {
     const t = createTestEnv()
     const response = await t.route({ type: 'data.get' }, `${LAUNCHER_URL}?x=1#vista`)
-    expect(response.ok).toBe(true)
+    expect(response).toMatchObject({ ok: true, result: { source: 'local' } })
   })
 })
 

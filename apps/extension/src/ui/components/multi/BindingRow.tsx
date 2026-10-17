@@ -1,6 +1,7 @@
 import type { Binding, Identity, ProfileInfo } from '@account-launcher/core'
 import type { UiError } from '@account-launcher/protocol'
 import { useId, useState } from 'react'
+import { useClock } from '../../clock-context'
 import { useI18n } from '../../i18n-context'
 import { renameStatus } from '../../lib/rename'
 import type { Destination } from '../../lib/sections'
@@ -24,6 +25,7 @@ interface BindingRowProps {
 // nombre que se pidió.
 export function BindingRow({ identity, binding, profiles, browser, send, mutate, reload }: BindingRowProps) {
   const { t } = useI18n()
+  const now = useClock()
   const selectId = useId()
   const [failure, setFailure] = useState<UiError | undefined>()
   const [creating, setCreating] = useState(false)
@@ -69,7 +71,7 @@ export function BindingRow({ identity, binding, profiles, browser, send, mutate,
   const useColor = (color: string) =>
     run(async () => {
       const response = await mutate([
-        { type: 'identity.put', identity: { ...identity, color, updatedAt: new Date().toISOString() } },
+        { type: 'identity.put', identity: { ...identity, color, updatedAt: now().toISOString() } },
       ])
       return response.ok ? undefined : response.error
     })

@@ -39,7 +39,7 @@ export function checkFileSize(size: number): Result<undefined, { readonly code: 
 
 // Algunos editores guardan el JSON con un BOM inicial, que JSON.parse no admite.
 export function readImportText(text: string): Result<ExportFile, ImportError> {
-  return parseImport(text.startsWith('﻿') ? text.slice(1) : text)
+  return parseImport(text.startsWith('\uFEFF') ? text.slice(1) : text)
 }
 
 export interface ImportCounts {
