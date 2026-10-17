@@ -4,6 +4,7 @@ import * as v from 'valibot'
 import { describe, expect, it } from 'vitest'
 import { HINTS } from '../../src/background/hints'
 import { createTestEnv } from '../helpers/env'
+import { pngImage } from '../helpers/images'
 
 // Un mensaje mínimo válido por cada tipo: añadir un tipo a UiRequestSchema sin añadirlo aquí no compila.
 const MESSAGES: { readonly [K in UiRequestType]: unknown } = {
@@ -25,6 +26,9 @@ const MESSAGES: { readonly [K in UiRequestType]: unknown } = {
   'pair.remove': { type: 'pair.remove', installationId: 'inst-b' },
   'pair.verify': { type: 'pair.verify' },
   'sync.refresh': { type: 'sync.refresh' },
+  'icon.get': { type: 'icon.get', key: 'icon:img-1' },
+  'icon.put': { type: 'icon.put', key: 'icon:img-1', ...pngImage() },
+  'icon.delete': { type: 'icon.delete', key: 'icon:img-1' },
 }
 
 // Pista provisional que ya no existe. Se arma por partes para que buscarla en el código solo encuentre código vivo.

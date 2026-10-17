@@ -1,4 +1,13 @@
-import { applyOps, err, ok, parseLauncherData, type Op, type OpError, type Result } from '@account-launcher/core'
+import {
+  applyOps,
+  err,
+  ok,
+  parseLauncherData,
+  type LauncherData,
+  type Op,
+  type OpError,
+  type Result,
+} from '@account-launcher/core'
 import type { UiError } from '@account-launcher/protocol'
 import { saveBackup } from '../../storage/backup'
 import type { Snapshot } from '../../storage/data-store'
@@ -7,6 +16,7 @@ import { inContext, readStore, type SwContext } from '../context'
 import type { SwEnv } from '../deps'
 import { uiError } from '../hints'
 import { splitModeChange, withMode } from '../mode'
+import { releaseImages } from './icons'
 import type { Handler } from './types'
 
 // Los errores de applyOps se traducen a código y pista: nunca llevan la lista de problemas del esquema.
@@ -29,8 +39,10 @@ export const getData: Handler<'data.get'> = (_request, env) =>
   })
 
 // Cambio puro que aplica las operaciones sobre la base (el almacén compartido puede reaplicarlo tras un conflict).
-function applyChange(ops: readonly Op[]) {
+// seen guarda la base de la última aplicación: la que se confirmó, para el borrado en cascada de imágenes.
+function applyChange(ops: readonly Op[], seen?: { before?: LauncherData }) {
   return (current: Snapshot): Result<{ next: Snapshot; value: { revision: number } }, UiError> => {
+    if (seen !== undefined) seen.before = current.data
     const applied = applyOps(current.data, ops)
     if (!applied.ok) return err(opError(applied.error))
     return ok({
@@ -74,11 +86,12 @@ async function mutateShared(
   context: SwContext,
   shared: SharedStore,
   ops: readonly Op[],
+  seen: { before?: LauncherData },
 ): Promise<Result<{ revision: number }, UiError>> {
   const { mode, rest } = splitModeChange(ops)
   let revision: number | undefined
   if (rest.length > 0) {
-    const written = await shared.write(applyChange(rest))
+    const written = await shared.write(applyChange(rest, seen))
     if (!written.ok) return written
     revision = written.value.value.revision
   }
@@ -96,9 +109,19 @@ async function mutateShared(
 // request.revision se ignora (DC3): las operaciones se reaplican sobre el último estado.
 export const mutateData: Handler<'data.mutate'> = (request, env) =>
   inContext(env, async (context) => {
-    if (context.shared !== undefined) return mutateShared(env, context, context.shared, request.ops)
-    const written = await context.store.write(applyChange(request.ops))
-    return written.ok ? ok(written.value.value) : written
+    const seen: { before?: LauncherData } = {}
+    const result =
+      context.shared !== undefined
+        ? await mutateShared(env, context, context.shared, request.ops, seen)
+        : await context.store
+            .write(applyChange(request.ops, seen))
+            .then((written) => (written.ok ? ok(written.value.value) : written))
+    // Cascada (T5): las imágenes que la operación deja sin uso se borran. applyOps es pura: repetirla da el mismo estado.
+    if (result.ok && seen.before !== undefined) {
+      const after = applyOps(seen.before, request.ops)
+      if (after.ok) await releaseImages(env, context, seen.before, after.value)
+    }
+    return result
   })
 
 export const getBindings: Handler<'bindings.get'> = (_request, env) =>

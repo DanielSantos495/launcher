@@ -3,7 +3,7 @@ import * as v from 'valibot'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { UiRequestSchema, type UiRequestType, type UiResults } from '../src/ui'
 
-// Un ejemplo válido por cada tipo de petición (son 18), más las variantes de los que tienen campos opcionales.
+// Un ejemplo válido por cada tipo de petición (son 21), más las variantes de los que tienen campos opcionales.
 const accepted = [
   { type: 'account.open', accountId: 'acc-1' },
   { type: 'account.open', accountId: 'acc-1', asIdentityId: 'id-home' },
@@ -36,6 +36,9 @@ const accepted = [
   { type: 'pair.remove', installationId: 'inst-b' },
   { type: 'pair.verify' },
   { type: 'sync.refresh' },
+  { type: 'icon.get', key: 'icon:img-1' },
+  { type: 'icon.put', key: 'icon:img-1', mime: 'image/png', base64: 'iVBORw0KGgo=' },
+  { type: 'icon.delete', key: 'icon:img-1' },
 ]
 
 describe('UiRequestSchema', () => {
@@ -45,7 +48,7 @@ describe('UiRequestSchema', () => {
 
   it('hay un ejemplo aceptado por cada tipo de petición', () => {
     const types = UiRequestSchema.options.map((option) => option.entries.type.literal)
-    expect(types).toHaveLength(18)
+    expect(types).toHaveLength(21)
     expect([...new Set(accepted.map((request) => request.type))].sort()).toEqual([...types].sort())
   })
 

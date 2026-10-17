@@ -22,7 +22,7 @@ function withHost<T>(
 
 // Resultado de un comando del host enviado con token. not_paired significa que otra instalación nos revocó (T15):
 // se borra el emparejamiento local. La UI recibe solo código y pista, nunca la revisión de un conflict.
-async function settle<T>(
+export async function settle<T>(
   env: SwEnv,
   context: SwContext,
   result: Result<T, HostCallError>,

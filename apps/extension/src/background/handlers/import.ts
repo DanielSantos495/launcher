@@ -4,6 +4,7 @@ import {
   planImport,
   rebindFromHints,
   type Bindings,
+  type LauncherData,
   type ProfileInfo,
   type Result,
 } from '@account-launcher/core'
@@ -14,6 +15,7 @@ import { inContext, requireHost, type SwContext } from '../context'
 import type { SwEnv } from '../deps'
 import { uiError } from '../hints'
 import { withMode } from '../mode'
+import { releaseImages } from './icons'
 import type { Handler } from './types'
 
 type ImportRequest = Extract<UiRequest, { type: 'data.import' }>
@@ -66,9 +68,11 @@ function importChange(request: ImportRequest, profiles: readonly ProfileInfo[]) 
 export const importData: Handler<'data.import'> = (request, env) =>
   inContext(env, async (context) => {
     const profiles = await profilesToRebind(context, env)
+    let before: LauncherData | undefined
     try {
       const written = await context.store.write(importChange(request, profiles), {
         beforeCommit: async (current) => {
+          before = current.data
           try {
             await saveBackup(env.deps, current, context.source)
           } catch {
@@ -76,6 +80,8 @@ export const importData: Handler<'data.import'> = (request, env) =>
           }
         },
       })
+      // Cascada (T5): las imágenes que la importación deja sin uso se borran.
+      if (written.ok && before !== undefined) await releaseImages(env, context, before, written.value.snapshot.data)
       return written.ok ? ok(written.value.value) : written
     } catch (error) {
       if (error instanceof BackupFailed) return err(uiError('internal', 'storage_write'))

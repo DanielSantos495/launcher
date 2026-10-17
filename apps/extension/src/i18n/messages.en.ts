@@ -85,6 +85,13 @@ export const en: Record<MessageKey, string> = {
   'account.notes': 'Notes (optional)',
   'account.icon': 'Emoji (optional)',
   'account.icon.hint': 'Replaces the service icon.',
+  'account.image': 'Image (optional)',
+  'account.image.hint':
+    'PNG, JPEG or WebP up to 32 KiB; replaces the icon. Stored in this browser (or in the launcher program if paired). It is not part of the exported backup: after importing, the automatic icon is used.',
+  'account.image.remove': 'Remove image',
+  'account.image.preview': 'Preview of the chosen image',
+  'account.image.invalid': 'The image is not valid. Use a PNG, JPEG or WebP.',
+  'account.image.too_large': 'The image is larger than 32 KiB. Choose a smaller one.',
   'account.favorite': 'Favorite',
   'account.create': 'Save account',
   'account.context': 'Where it opens',
@@ -199,6 +206,7 @@ export const en: Record<MessageKey, string> = {
   'backup.title': 'Backup',
   'export.action': 'Export backup',
   'export.warning': 'The file includes emails and notes: keep it somewhere safe.',
+  'export.images': 'Images uploaded as icons are not exported: after importing, those accounts use the automatic icon.',
   'export.encrypt': 'Encrypt with a password',
   'export.password': 'Password',
   'export.password.confirm': 'Repeat the password',
@@ -397,4 +405,6 @@ export const en: Record<MessageKey, string> = {
   'hint.shared_bindings_full': 'The shared links take up too much space.',
   'hint.already_paired': 'This profile is already paired.',
   'hint.import_invalid': 'The file cannot be imported as it is.',
+  'hint.icon_limit': 'The maximum number of stored images (2500) was reached. Remove the image from an account.',
+  'hint.icon_too_large': 'The image is too large (32 KiB maximum).',
 }

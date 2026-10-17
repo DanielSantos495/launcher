@@ -50,6 +50,7 @@ export interface AccountInput {
   readonly identityId: string
   readonly groupId: string // vacío = sin grupo
   readonly icon: string // emoji; vacío = el del servicio
+  readonly image: string // clave icon:<id> de la imagen subida; vacío = sin imagen (gana sobre el emoji)
   readonly favorite: boolean
   readonly contextOverride: string // '', 'identity' o 'current'
 }
@@ -190,7 +191,7 @@ export function buildAccount(input: AccountInput, ctx: BuildContext, existing?: 
     collector.add('url', 'field.url.required')
   }
   const username = input.username.trim()
-  const icon = emojiRef(input.icon)
+  const icon: IconRef | undefined = input.image === '' ? emojiRef(input.icon) : { type: 'image', key: input.image }
   const candidate = {
     id: existing?.id ?? ctx.newId(),
     identityId: input.identityId,
@@ -267,6 +268,7 @@ export function accountToInput(account: Account): AccountInput {
     identityId: account.identityId,
     groupId: account.groupId ?? '',
     icon: account.icon.type === 'emoji' ? account.icon.value : '',
+    image: account.icon.type === 'image' ? account.icon.key : '',
     favorite: account.favorite,
     contextOverride: account.contextOverride ?? '',
   }

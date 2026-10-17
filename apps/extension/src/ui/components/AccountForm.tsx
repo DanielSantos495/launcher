@@ -1,13 +1,18 @@
 import { CATALOG, type Account, type LauncherData } from '@account-launcher/core'
-import type { UiError } from '@account-launcher/protocol'
-import { useId, useMemo } from 'react'
+import type { IconImage, UiError } from '@account-launcher/protocol'
+import { useId, useMemo, useState } from 'react'
 import { useClock } from '../clock-context'
 import { useI18n } from '../i18n-context'
+import { useImageLoader } from '../image-icons'
+import type { LauncherClient } from '../client'
+import type { MessageKey } from '../../i18n/i18n'
+import { imageDataUrl, readImageFile } from '../lib/image-file'
 import { accountToInput, buildAccount, buildContext } from '../lib/forms'
 import { orderedGroups, orderedIdentities } from '../lib/sections'
 import { useEntityForm } from '../state/useEntityForm'
 import { Dialog } from './Dialog'
 import { Field, fieldAria } from './Field'
+import { Icon } from './Icon'
 import { FormFooter } from './FormFooter'
 
 interface AccountFormProps {
@@ -18,15 +23,30 @@ interface AccountFormProps {
   readonly identityId?: string
   readonly groupId?: string
   readonly ownIdentityId?: string
+  // Para subir (icon.put) y retirar (icon.delete) la imagen elegida; el cascada de las anteriores es del service worker.
+  readonly send: LauncherClient['send']
   readonly onSave: (account: Account) => Promise<UiError | undefined>
   readonly onCancel: () => void
 }
 
 const FIRST_SERVICE = CATALOG[0]?.id ?? 'generic'
 
-export function AccountForm({ account, data, identityId, groupId, ownIdentityId, onSave, onCancel }: AccountFormProps) {
+export function AccountForm({
+  account,
+  data,
+  identityId,
+  groupId,
+  ownIdentityId,
+  send,
+  onSave,
+  onCancel,
+}: AccountFormProps) {
   const { t } = useI18n()
   const now = useClock()
+  const images = useImageLoader()
+  // Imagen elegida y aún no subida: se sube al guardar, así cancelar el formulario no deja imágenes huérfanas.
+  const [picked, setPicked] = useState<(IconImage & { readonly key: string }) | undefined>()
+  const [imageError, setImageError] = useState<MessageKey | undefined>()
   const base = useId()
   const identities = useMemo(() => orderedIdentities(data, ownIdentityId), [data, ownIdentityId])
   const groups = useMemo(() => orderedGroups(data), [data])
@@ -55,12 +75,22 @@ export function AccountForm({ account, data, identityId, groupId, ownIdentityId,
             identityId: identityId ?? identities[0]?.id ?? '',
             groupId: groupId ?? '',
             icon: '',
+            image: '',
             favorite: false,
             contextOverride: '',
           }
         : accountToInput(account),
     build: (input) => buildAccount(input, buildContext(data, now()), account),
-    save: onSave,
+    save: async (built) => {
+      if (picked === undefined || built.icon.type !== 'image' || built.icon.key !== picked.key) return onSave(built)
+      const uploaded = await send({ type: 'icon.put', key: picked.key, mime: picked.mime, base64: picked.base64 })
+      if (!uploaded.ok) return uploaded.error
+      const error = await onSave(built)
+      if (error === undefined) images.remember(picked.key, { mime: picked.mime, base64: picked.base64 })
+      // La cuenta no se guardó: la imagen subida sobra (mejor esfuerzo).
+      else await send({ type: 'icon.delete', key: picked.key })
+      return error
+    },
   })
   const { input, patch, fieldError } = form
   const label = fieldError('label')
@@ -72,6 +102,24 @@ export function AccountForm({ account, data, identityId, groupId, ownIdentityId,
   const identityError = fieldError('identityId')
   const groupError = fieldError('groupId')
   const contextError = fieldError('contextOverride')
+
+  const chooseImage = async (file: File | undefined): Promise<void> => {
+    if (file === undefined) return
+    const read = await readImageFile(file)
+    if (!read.ok) {
+      setImageError(read.error === 'too_large' ? 'account.image.too_large' : 'account.image.invalid')
+      return
+    }
+    setImageError(undefined)
+    const key = `icon:${crypto.randomUUID()}`
+    setPicked({ key, ...read.value })
+    patch({ image: key, icon: '' })
+  }
+  const removeImage = (): void => {
+    setPicked(undefined)
+    setImageError(undefined)
+    patch({ image: '' })
+  }
 
   // Al cambiar de servicio, la etiqueta sigue al nombre del servicio mientras no la haya escrito el usuario.
   const changeService = (serviceId: string): void => {
@@ -192,10 +240,48 @@ export function AccountForm({ account, data, identityId, groupId, ownIdentityId,
             value={input.icon}
             autoComplete="off"
             onChange={(event) => {
-              patch({ icon: event.target.value })
+              patch({ icon: event.target.value, image: '' })
+              setPicked(undefined)
             }}
           />
         </Field>
+        <Field
+          id={`${base}-image`}
+          label={t('account.image')}
+          hint={t('account.image.hint')}
+          {...(imageError === undefined ? {} : { error: t(imageError) })}
+        >
+          <input
+            {...fieldAria(`${base}-image`, true, imageError !== undefined)}
+            name="image"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={(event) => {
+              const input = event.target
+              void chooseImage(input.files?.[0]).then(() => {
+                input.value = ''
+              })
+            }}
+          />
+        </Field>
+        {input.image === '' ? null : (
+          <div className="image-preview">
+            {picked === undefined ? (
+              <Icon icon={{ type: 'image', key: input.image }} size={48} />
+            ) : (
+              <img
+                className="icon icon--image"
+                src={imageDataUrl(picked)}
+                width={48}
+                height={48}
+                alt={t('account.image.preview')}
+              />
+            )}
+            <button type="button" className="button" onClick={removeImage}>
+              {t('account.image.remove')}
+            </button>
+          </div>
+        )}
         {data.settings.mode === 'multi' ? (
           <Field id={`${base}-context`} label={t('account.context')} error={contextError}>
             <select

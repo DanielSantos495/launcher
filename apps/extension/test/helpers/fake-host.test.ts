@@ -482,3 +482,40 @@ describe('el host falso: emparejamiento y datos compartidos', () => {
     ])
   })
 })
+
+describe('iconos del host falso (como internal/store/icons.go)', () => {
+  const PNG = 'iVBORw0KGgo='
+
+  async function paired(maxIcons?: number): Promise<{ fake: FakeHost; token: string }> {
+    const fake = createFakeHost(maxIcons === undefined ? {} : { maxIcons })
+    const { token } = expectOk(await call(fake, 'pair.start', { installationId: 'inst-a' }))
+    return { fake, token: token ?? '' }
+  }
+
+  it('put, get y delete; borrar una clave inexistente no es un error', async () => {
+    const { fake, token } = await paired()
+    const key = 'icon:a'
+    expect(await call(fake, 'icons.get', { token, key })).toEqual({ ok: false, error: { code: 'not_found' } })
+    expectOk(await call(fake, 'icons.put', { token, key, mime: 'image/png', base64: PNG }))
+    expect(expectOk(await call(fake, 'icons.get', { token, key }))).toEqual({ key, mime: 'image/png', base64: PNG })
+    expectOk(await call(fake, 'icons.delete', { token, key }))
+    expectOk(await call(fake, 'icons.delete', { token, key }))
+    expect(fake.state.icons.size).toBe(0)
+  })
+
+  it('el tope cuenta claves nuevas: reemplazar una existente no suma', async () => {
+    const { fake, token } = await paired(1)
+    expectOk(await call(fake, 'icons.put', { token, key: 'icon:a', mime: 'image/png', base64: PNG }))
+    expectOk(await call(fake, 'icons.put', { token, key: 'icon:a', mime: 'image/png', base64: PNG }))
+    expect(await call(fake, 'icons.put', { token, key: 'icon:b', mime: 'image/png', base64: PNG })).toEqual({
+      ok: false,
+      error: { code: 'limit_reached' },
+    })
+  })
+
+  it('un token desconocido es not_paired', async () => {
+    const { fake } = await paired()
+    const response = await call(fake, 'icons.get', { token: 'B'.repeat(43), key: 'icon:a' })
+    expect(response).toEqual({ ok: false, error: { code: 'not_paired' } })
+  })
+})

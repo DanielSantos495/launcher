@@ -33,6 +33,8 @@ export const HINTS = [
   'shared_bindings_full',
   'already_paired',
   'import_invalid',
+  'icon_limit',
+  'icon_too_large',
 ] as const
 
 export type Hint = (typeof HINTS)[number]

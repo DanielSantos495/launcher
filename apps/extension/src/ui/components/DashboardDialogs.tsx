@@ -103,6 +103,7 @@ export function DashboardDialogs({
           {...(dialog.groupId === undefined ? {} : { groupId: dialog.groupId })}
           {...(ownIdentityId === undefined ? {} : { ownIdentityId })}
           data={data}
+          send={send}
           onSave={(account) => apply([{ type: 'account.put', account }], 'toast.account.saved')}
           onCancel={onClose}
         />

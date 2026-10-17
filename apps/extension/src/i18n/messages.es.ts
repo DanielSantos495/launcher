@@ -84,6 +84,13 @@ export const es = {
   'account.notes': 'Notas (opcional)',
   'account.icon': 'Emoji (opcional)',
   'account.icon.hint': 'Sustituye al icono del servicio.',
+  'account.image': 'Imagen (opcional)',
+  'account.image.hint':
+    'PNG, JPEG o WebP de hasta 32 KiB; sustituye al icono. Se guarda en este navegador (o en el programa del launcher si estás emparejado). No va en la copia exportada: tras importar se usa el icono automático.',
+  'account.image.remove': 'Quitar imagen',
+  'account.image.preview': 'Vista previa de la imagen elegida',
+  'account.image.invalid': 'La imagen no es válida. Usa un PNG, JPEG o WebP.',
+  'account.image.too_large': 'La imagen pesa más de 32 KiB. Elige una más pequeña.',
   'account.favorite': 'Favorita',
   'account.create': 'Guardar cuenta',
   'account.context': 'Dónde se abre',
@@ -198,6 +205,8 @@ export const es = {
   'backup.title': 'Copia de seguridad',
   'export.action': 'Exportar copia',
   'export.warning': 'El archivo incluye emails y notas: guárdalo en un lugar seguro.',
+  'export.images':
+    'Las imágenes subidas como icono no se exportan: al importar, esas cuentas usan el icono automático.',
   'export.encrypt': 'Cifrar con contraseña',
   'export.password': 'Contraseña',
   'export.password.confirm': 'Repite la contraseña',
@@ -401,4 +410,6 @@ export const es = {
   'hint.shared_bindings_full': 'Los vínculos compartidos ocupan demasiado.',
   'hint.already_paired': 'Este perfil ya está emparejado.',
   'hint.import_invalid': 'El archivo no se puede importar tal cual.',
+  'hint.icon_limit': 'Se alcanzó el máximo de imágenes guardadas (2500). Quita la imagen de alguna cuenta.',
+  'hint.icon_too_large': 'La imagen es demasiado grande (máximo 32 KiB).',
 } as const satisfies Record<string, string>

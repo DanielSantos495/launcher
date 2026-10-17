@@ -31,6 +31,7 @@ const ACCOUNT_INPUT: AccountInput = {
   identityId: 'ana',
   groupId: '',
   icon: '',
+  image: '',
   favorite: false,
   contextOverride: '',
 }

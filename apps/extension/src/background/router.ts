@@ -12,6 +12,7 @@ import type { SwEnv } from './deps'
 import { toUiError } from './host-client'
 import { getBindings, getData, mutateData, setBinding } from './handlers/data'
 import { capabilitiesGet, hostPing } from './handlers/capabilities'
+import { iconDelete, iconGet, iconPut } from './handlers/icons'
 import { importData } from './handlers/import'
 import { openAccount, openTemporary } from './handlers/open'
 import {
@@ -78,6 +79,9 @@ const HANDLERS: Handlers = {
   'pair.remove': pairRemove,
   'pair.verify': pairVerify,
   'sync.refresh': syncRefresh,
+  'icon.get': iconGet,
+  'icon.put': iconPut,
+  'icon.delete': iconDelete,
 }
 
 function dispatch<K extends UiRequestType>(

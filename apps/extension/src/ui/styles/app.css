@@ -387,6 +387,18 @@ kbd {
   line-height: 1;
 }
 
+/* Imagen subida como icono: recortada al cuadrado, nunca estirada. */
+.icon--image {
+  object-fit: cover;
+}
+
+.image-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
 /* Menú de acciones */
 .menu {
   position: relative;

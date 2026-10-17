@@ -22,6 +22,7 @@ export interface FakeHostOptions {
   readonly profiles?: ProfileInfo[] // por defecto Default "Personal" (nombre elegido) y "Profile 1" "Persona 1" (por defecto)
   readonly persistentContainers?: Readonly<Record<string, readonly string[]>> // por carpeta de perfil
   readonly maxPairedProfiles?: number // por defecto 2
+  readonly maxIcons?: number // por defecto 2500, como el host real
   readonly now?: () => Date
 }
 
@@ -48,9 +49,13 @@ export interface FakeHost {
     launches: { cmd: 'open' | 'openTemporary'; profileDirectory: string; url: string; name?: string }[]
     store: { revision: number; data: unknown; bindings: Record<string, unknown> } | undefined
     installations: FakeInstallation[]
+    // Imágenes subidas por clave (icon:<id>), como el almacén de iconos del host real.
+    icons: Map<string, { mime: string; base64: string }>
   }
 }
 
+// Tope de imágenes del host real (internal/store: maxIcons). Se puede bajar en las pruebas con `maxIcons`.
+const MAX_ICONS = 2500
 const DEFAULT_NOW = '2026-10-08T12:00:00.000Z'
 // Tras tantos pair.join fallidos el código vigente se anula (el host real no deja probar códigos sin fin).
 const MAX_JOIN_FAILURES = 5
@@ -79,6 +84,7 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
   const browser = options.browser ?? 'brave'
   const temporaryContainer = options.temporaryContainer ?? browser === 'brave'
   const maxPairedProfiles = options.maxPairedProfiles ?? DEFAULT_MAX_PAIRED_PROFILES
+  const maxIcons = options.maxIcons ?? MAX_ICONS
   const now = options.now ?? (() => new Date(DEFAULT_NOW))
   const persistentContainers = options.persistentContainers ?? {}
   const hostName = `${HOST_PREFIX}.${browser}`
@@ -275,11 +281,27 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
           return success('sync.put', { revision: current.revision })
         })
       }
+      // Como el host real (internal/store/icons.go): reemplazar una clave que existe no suma al tope, una clave nueva
+      // con el tope alcanzado es limit_reached, y borrar una clave inexistente no es un error.
       case 'icons.get':
+        return authed(request.args.token, () => {
+          const icon = host.state.icons.get(request.args.key)
+          return icon === undefined
+            ? failure('not_found')
+            : success('icons.get', { key: request.args.key, mime: icon.mime, base64: icon.base64 })
+        })
       case 'icons.put':
+        return authed(request.args.token, () => {
+          const { key, mime, base64 } = request.args
+          if (!host.state.icons.has(key) && host.state.icons.size >= maxIcons) return failure('limit_reached')
+          host.state.icons.set(key, { mime, base64 })
+          return success('icons.put', {})
+        })
       case 'icons.delete':
-        // Los iconos subidos se implementan en F2: en F1 la extensión no envía estos comandos.
-        return authed(request.args.token, () => failure('internal'))
+        return authed(request.args.token, () => {
+          host.state.icons.delete(request.args.key)
+          return success('icons.delete', {})
+        })
     }
   }
 
@@ -328,6 +350,7 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
       launches: [],
       store: undefined,
       installations: [],
+      icons: new Map(),
     },
   }
   return host

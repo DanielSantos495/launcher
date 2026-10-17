@@ -157,6 +157,8 @@ export function ImportExport({ data, bindings, profiles, send, reload, download 
           {t('export.action')}
         </button>
         <p className="backup__note">{t('export.warning')}</p>
+        {/* Las imágenes subidas (icon:<id>) no entran en la copia: al importar, esas cuentas usan el icono automático. */}
+        <p className="backup__note">{t('export.images')}</p>
       </div>
       <div className="backup__row">
         <label className="backup__check">

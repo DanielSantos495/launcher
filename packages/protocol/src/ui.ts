@@ -14,6 +14,7 @@ import {
 } from '@account-launcher/core'
 import * as v from 'valibot'
 import { ContainerNameSchema, PairCodeSchema, type HostErrorCode, type HostResult } from './host'
+import { IconImageSchema, UploadedIconKeySchema, type IconImage } from './icons'
 
 // Mensajes del dashboard al service worker. El SW los valida y comprueba sender.id (T1).
 export const UiRequestSchema = v.variant('type', [
@@ -61,6 +62,19 @@ export const UiRequestSchema = v.variant('type', [
   v.strictObject({ type: v.literal('pair.remove'), installationId: IdSchema }),
   v.strictObject({ type: v.literal('pair.verify') }),
   v.strictObject({ type: v.literal('sync.refresh') }),
+  // Imágenes subidas como icono (T5). Con datos locales van a storage.local; con la instalación emparejada, al host.
+  v.strictObject({ type: v.literal('icon.get'), key: UploadedIconKeySchema }),
+  v.pipe(
+    v.strictObject({
+      type: v.literal('icon.put'),
+      key: UploadedIconKeySchema,
+      mime: IconImageSchema.entries.mime,
+      base64: IconImageSchema.entries.base64,
+    }),
+    // Bytes mágicos, base64 canónico y tamaño: la comprobación de IconImageSchema sobre el mensaje.
+    v.check((request) => v.is(IconImageSchema, { mime: request.mime, base64: request.base64 }), 'imagen no válida'),
+  ),
+  v.strictObject({ type: v.literal('icon.delete'), key: UploadedIconKeySchema }),
 ])
 
 export type UiRequest = v.InferOutput<typeof UiRequestSchema>
@@ -128,4 +142,7 @@ export interface UiResults {
   'pair.remove': Empty
   'pair.verify': { readonly expiresAt: string }
   'sync.refresh': { readonly revision: number }
+  'icon.get': IconImage
+  'icon.put': Empty
+  'icon.delete': Empty
 }
