@@ -30,6 +30,20 @@ describe('reviewProfiles', () => {
     )
     expect(result.fresh.map((p) => p.directory)).toEqual(['Profile 3'])
   })
+
+  it('las carpetas vinculadas pasan a vistas, para que al desvincular no vuelva el aviso', () => {
+    const result = reviewProfiles(
+      [profile('Default'), profile('Profile 2'), profile('Profile 3')],
+      ['Default'],
+      new Set(['Profile 2']),
+    )
+    expect(result.nextSeen).toEqual(['Default', 'Profile 2'])
+  })
+
+  it('una vinculada ya vista no reescribe la lista', () => {
+    const result = reviewProfiles([profile('Default')], ['Default'], new Set(['Default']))
+    expect(result.nextSeen).toBeUndefined()
+  })
 })
 
 describe('markSeen', () => {

@@ -97,6 +97,13 @@ describe('savePairing', () => {
     await expect(readToken(deps, paired)).resolves.toBe(TOKEN)
   })
 
+  it('descarta la caché de sesión de un token anterior: la caché va atada al token vigente', async () => {
+    const { deps, session } = createTestEnv()
+    await deps.session.set({ shared: { hostRevision: 3 }, iconCache: ['x'] })
+    await savePairing(deps, { installationId: 'abc', paired: false }, TOKEN)
+    expect(session.dump()).toEqual({})
+  })
+
   it('conserva los campos propios de la instalación', async () => {
     const { deps, local } = createTestEnv()
     const installation = { installationId: 'abc', paired: false, ownIdentityId: 'ana', ownProfileDirectory: 'Default' }

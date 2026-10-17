@@ -38,8 +38,12 @@ export function reviewProfiles(
         }
   }
   const known = new Set(seen)
+  // Las carpetas con vínculo cuentan como vistas: si se desvinculan, el aviso no debe volver.
+  const linked = profiles.map((profile) => profile.directory).filter((directory) => bound.has(directory))
+  const added = markSeen(seen, linked)
   return {
     fresh: profiles.filter((profile) => !known.has(profile.directory) && !bound.has(profile.directory)),
-    nextSeen: undefined,
+    nextSeen:
+      added.length === seen.length && added.every((directory, index) => directory === seen[index]) ? undefined : added,
   }
 }

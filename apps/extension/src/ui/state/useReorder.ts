@@ -55,6 +55,9 @@ export function useReorder(params: ReorderParams): {
   const dragging = useRef<Dragging | undefined>(undefined)
   const focusAfter = useRef<string | undefined>(undefined)
   const flip = useRef(false)
+  // Último orden pedido por tipo y aún no visto en pantalla: `base` es la lista (por referencia) sobre la que se pidió.
+  // Mientras la pantalla siga con esa lista, el siguiente movimiento parte del orden pedido y no del viejo.
+  const pending = useRef(new Map<Dragging['kind'], { readonly base: unknown; readonly ids: readonly string[] }>())
 
   useEffect(() => {
     latest.current = params
@@ -74,33 +77,60 @@ export function useReorder(params: ReorderParams): {
     setAnnouncement(flip.current ? text : `${text}${NBSP}`)
   }, [])
 
-  // Plan de un movimiento de cuenta: la lista de ids de su sección ya movida, o undefined si no hay movimiento.
-  const planAccount = useCallback((id: string, move: Move): string[] | undefined => {
-    const { sections, view, ownIdentityId } = latest.current
-    const section = sections.find((candidate) => candidate.accounts.some((account) => account.id === id))
-    if (section === undefined) return undefined
-    return moveIds(
-      section.accounts,
-      id,
-      move,
-      (a, b) => accountBand(a, view, ownIdentityId) === accountBand(b, view, ownIdentityId),
-    )
-  }, [])
+  // La lista tal como quedará tras los movimientos ya pedidos; sin ellos, o con datos nuevos, la misma lista.
+  const withPending = useCallback(
+    <T extends { readonly id: string }>(kind: Dragging['kind'], base: unknown, list: readonly T[]): readonly T[] => {
+      const requested = pending.current.get(kind)
+      if (requested === undefined || requested.base !== base || requested.ids.length !== list.length) return list
+      const byId = new Map(list.map((item) => [item.id, item]))
+      const ordered = requested.ids.flatMap((id) => byId.get(id) ?? [])
+      return ordered.length === list.length ? ordered : list
+    },
+    [],
+  )
 
-  const planIdentity = useCallback((id: string, move: Move): string[] | undefined => {
-    const { identities, ownIdentityId } = latest.current
-    return moveIds(identities, id, move, (a, b) => (a.id === ownIdentityId) === (b.id === ownIdentityId))
-  }, [])
+  // Plan de un movimiento de cuenta: la lista de ids de su sección ya movida, o undefined si no hay movimiento.
+  const planAccount = useCallback(
+    (id: string, move: Move): string[] | undefined => {
+      const { sections, view, ownIdentityId } = latest.current
+      const section = sections.find((candidate) => candidate.accounts.some((account) => account.id === id))
+      if (section === undefined) return undefined
+      return moveIds(
+        withPending('account', sections, section.accounts),
+        id,
+        move,
+        (a, b) => accountBand(a, view, ownIdentityId) === accountBand(b, view, ownIdentityId),
+      )
+    },
+    [withPending],
+  )
+
+  const planIdentity = useCallback(
+    (id: string, move: Move): string[] | undefined => {
+      const { identities, ownIdentityId } = latest.current
+      return moveIds(
+        withPending('identity', identities, identities),
+        id,
+        move,
+        (a, b) => (a.id === ownIdentityId) === (b.id === ownIdentityId),
+      )
+    },
+    [withPending],
+  )
 
   const commit = useCallback(
     async (kind: Dragging['kind'], id: string, label: string, ids: string[]): Promise<void> => {
-      const { mutate, onError, t } = latest.current
+      const { mutate, onError, t, sections, identities } = latest.current
       if (kind === 'account') focusAfter.current = id
+      pending.current.set(kind, { base: kind === 'account' ? sections : identities, ids })
       const response = await mutate([{ type: kind === 'account' ? 'account.reorder' : 'identity.reorder', ids }])
       onError(response.ok ? undefined : response.error)
       if (response.ok) {
         say(t('reorder.moved', { label, position: ids.indexOf(id) + 1, total: ids.length }))
-      } else focusAfter.current = undefined
+      } else {
+        pending.current.delete(kind)
+        focusAfter.current = undefined
+      }
     },
     [say],
   )

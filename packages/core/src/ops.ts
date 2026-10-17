@@ -26,8 +26,8 @@ export const OpSchema = v.variant('type', [
   v.strictObject({ type: v.literal('account.put'), account: AccountSchema }),
   v.strictObject({ type: v.literal('account.delete'), id: IdSchema }),
   v.strictObject({ type: v.literal('account.touch'), id: IdSchema, at: TimestampSchema }),
-  // Reordenar: reescribe `order` con el índice de cada id en la lista (0, 1, 2…). Las entidades que no están en la
-  // lista no cambian. Un id repetido da `invalid`; uno inexistente, `not_found`.
+  // Reordenar: reparte entre los ids de la lista, en ese orden, los valores de `order` que ya tenían (o, si hay
+  // empates, el índice 0, 1, 2…). Las entidades que no están en la lista no cambian. Un id repetido da `invalid`; uno inexistente, `not_found`.
   v.strictObject({ type: v.literal('identity.reorder'), ids: boundedArray(IdSchema, LIMITS.identities) }),
   v.strictObject({ type: v.literal('account.reorder'), ids: boundedArray(IdSchema, LIMITS.accounts) }),
   v.strictObject({ type: v.literal('customService.put'), service: CustomServiceSchema }),
@@ -79,10 +79,16 @@ function reorder<T extends { readonly id: string; readonly order: number }>(
   }
   const known = new Set(list.map((item) => item.id))
   if (ids.some((id) => !known.has(id))) return err({ code: 'not_found' })
+  // Se reparten entre los ids, en el nuevo orden, los valores de `order` que ya tenían: así el orden global entre
+  // secciones (otra identidad, otro grupo) no se altera. Con empates entre ellos se usa el índice de la lista.
+  const taken = list.filter((item) => position.has(item.id)).map((item) => item.order)
+  taken.sort((a, b) => a - b)
+  const distinct = taken.every((value, index) => index === 0 || value !== taken[index - 1])
   return ok(
     list.map((item) => {
-      const order = position.get(item.id)
-      return order === undefined ? item : { ...item, order }
+      const index = position.get(item.id)
+      if (index === undefined) return item
+      return { ...item, order: distinct ? (taken[index] ?? index) : index }
     }),
   )
 }

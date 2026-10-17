@@ -24,7 +24,7 @@ export interface InstallationView {
 export interface LauncherClient {
   send<R extends UiRequest>(request: R): Promise<UiResponse<UiResults[R['type']]>>
   installation(): Promise<InstallationView | undefined> // lee y valida LOCAL_KEYS.installation (InstallationSchema)
-  backupBytes(): Promise<number> // bytes UTF-8 del JSON de LOCAL_KEYS.backup; 0 si no hay o no se puede leer
+  backupBytes(): Promise<number> // bytes UTF-8 del JSON de LOCAL_KEYS.backup y seenProfiles; 0 si no hay o no se puede leer
   imageBytes(): Promise<number> // bytes de las imágenes de storage.local (LOCAL_KEYS.iconIndex); 0 si no hay
   seenProfiles(): Promise<string[] | undefined> // carpetas vistas (LOCAL_KEYS.seenProfiles); undefined si no hay o no valida
   saveSeenProfiles(directories: readonly string[]): Promise<void> // las guarda; no rechaza
@@ -70,9 +70,12 @@ export function parseSeenProfiles(raw: unknown): string[] | undefined {
   return parsed.success ? parsed.output : undefined
 }
 
-// Bytes que ocupa lo guardado como copia de seguridad (0 si no hay): cuentan para la cuota de storage.local.
-export function backupSize(raw: unknown): number {
-  return raw === undefined ? 0 : jsonBytes(raw)
+// Bytes que ocupan la copia de seguridad y las demás claves propias (las carpetas vistas); las ausentes cuentan 0.
+// Todo vive en storage.local, así que cuenta para su cuota.
+export function backupSize(...raws: unknown[]): number {
+  let bytes = 0
+  for (const raw of raws) if (raw !== undefined) bytes += jsonBytes(raw)
+  return bytes
 }
 
 // Bytes de las imágenes del índice que hay en `stored` (las que faltan no cuentan); 0 si el índice no es válido.

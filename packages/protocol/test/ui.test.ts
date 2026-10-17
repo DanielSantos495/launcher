@@ -3,6 +3,15 @@ import * as v from 'valibot'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { UiRequestSchema, type UiRequestType, type UiResults } from '../src/ui'
 
+const withIdentity = (id: string, label: string, order: number) => ({
+  id,
+  label,
+  color: '#336699',
+  order,
+  createdAt: '2026-10-07T12:00:00.000Z',
+  updatedAt: '2026-10-07T12:00:00.000Z',
+})
+
 // Un ejemplo válido por cada tipo de petición (son 21), más las variantes de los que tienen campos opcionales.
 const accepted = [
   { type: 'account.open', accountId: 'acc-1' },
@@ -24,7 +33,7 @@ const accepted = [
     type: 'data.import',
     revision: 3,
     mode: 'merge',
-    data: createEmptyData(),
+    data: { ...createEmptyData(), identities: [withIdentity('id-home', 'Casa', 0)] },
     bindingHints: [{ identityId: 'id-home', kind: 'chromium-profile', name: 'Casa' }],
   },
   { type: 'bindings.get' },
@@ -83,6 +92,35 @@ describe('UiRequestSchema', () => {
     { type: 'data.import', revision: 3, mode: 'merge', data: createEmptyData(), extra: true },
   ])('rechaza %j', (request) => {
     expect(v.safeParse(UiRequestSchema, request).success).toBe(false)
+  })
+})
+
+describe('UiRequestSchema: orden de validación y pistas', () => {
+  it('data.mutate comprueba el número de operaciones antes de validar cada una (checklist 2)', () => {
+    const ops = Array.from({ length: 101 }, () => ({ type: 'no-existe' }))
+    const parsed = v.safeParse(UiRequestSchema, { type: 'data.mutate', revision: 3, ops })
+    expect(parsed.success).toBe(false)
+    // Un solo fallo (el tope), no uno por cada operación.
+    expect(parsed.issues).toHaveLength(1)
+  })
+
+  const imported = (bindingHints: unknown[]) => ({
+    type: 'data.import',
+    revision: 3,
+    mode: 'merge',
+    data: {
+      ...createEmptyData(),
+      identities: [withIdentity('id-home', 'Casa', 0), withIdentity('id-work', 'Trabajo', 1)],
+    },
+    bindingHints,
+  })
+
+  it('data.import rechaza pistas repetidas de una misma identidad', () => {
+    const home = { identityId: 'id-home', kind: 'current' }
+    expect(v.safeParse(UiRequestSchema, imported([home, { identityId: 'id-work', kind: 'current' }])).success).toBe(
+      true,
+    )
+    expect(v.safeParse(UiRequestSchema, imported([home, home])).success).toBe(false)
   })
 })
 

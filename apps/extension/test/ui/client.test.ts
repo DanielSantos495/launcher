@@ -90,6 +90,9 @@ describe('backupSize', () => {
   it('sin copia son 0 bytes; con copia, los bytes UTF-8 de su JSON', () => {
     expect(backupSize(undefined)).toBe(0)
     expect(backupSize({ a: 'é' })).toBe(10)
+    // Suma también otras claves propias (las carpetas vistas): cuentan para la cuota de storage.local.
+    expect(backupSize({ a: 'é' }, ['x'])).toBe(15)
+    expect(backupSize(undefined, ['x'])).toBe(5)
   })
 })
 

@@ -72,6 +72,18 @@ describe('ordenar cuentas con el teclado', () => {
     })
   })
 
+  it('dos Alt+flecha seguidos, antes de que lleguen los datos nuevos, suman dos puestos', async () => {
+    const { container } = await open(abc())
+    const button = within(tile(container, 'a')).getByRole('button', { name: 'Alfa' })
+    button.focus()
+    // Sin esperar entre las dos pulsaciones: la segunda parte de la pantalla vieja si no se tiene en cuenta la primera.
+    fireEvent.keyDown(button, { key: 'ArrowDown', altKey: true })
+    fireEvent.keyDown(button, { key: 'ArrowDown', altKey: true })
+    await waitFor(() => {
+      expect(labels(container)).toEqual(['Beta', 'Gamma', 'Alfa'])
+    })
+  })
+
   it('Alt+flecha abajo mueve un puesto hacia el final', async () => {
     const { container, user } = await open(abc())
     within(tile(container, 'a')).getByRole('button', { name: 'Alfa' }).focus()

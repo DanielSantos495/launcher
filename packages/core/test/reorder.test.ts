@@ -20,12 +20,26 @@ const three = () =>
   })
 
 describe('account.reorder', () => {
-  it('reescribe order con el índice de la lista y deja intactas las demás cuentas', () => {
+  it('reparte entre las cuentas de la lista los valores de order que ya tenían y deja intactas las demás', () => {
     const r = applyOps(three(), [{ type: 'account.reorder', ids: ['a3', 'a1', 'a2'] }])
     expect(r.ok).toBe(true)
     if (!r.ok) return
     const orders = Object.fromEntries(r.value.accounts.map((a) => [a.id, a.order]))
-    expect(orders).toEqual({ a3: 0, a1: 1, a2: 2, z1: 3 })
+    // El orden global entre secciones no se altera: z1 sigue en 3 y no hay empates ni saltos nuevos.
+    expect(orders).toEqual({ a3: 5, a1: 7, a2: 9, z1: 3 })
+  })
+
+  it('con empates en order usa el índice de la lista, para que el movimiento tenga efecto', () => {
+    const tied = data({
+      identities: [identity({ id: 'i-a', label: 'A', order: 0 })],
+      accounts: [
+        account({ id: 'a1', identityId: 'i-a', order: 0 }),
+        account({ id: 'a2', identityId: 'i-a', order: 0 }),
+      ],
+    })
+    const r = applyOps(tied, [{ type: 'account.reorder', ids: ['a2', 'a1'] }])
+    if (!r.ok) throw new Error('falló')
+    expect(Object.fromEntries(r.value.accounts.map((a) => [a.id, a.order]))).toEqual({ a2: 0, a1: 1 })
   })
 
   it('es determinista: repetir la misma lista da los mismos datos', () => {

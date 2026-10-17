@@ -7,6 +7,8 @@
   --ink: #1b2333;
   --ink-secondary: #5a6475;
   --line: #d3d9e2;
+  /* Borde de controles (botones, campos): 3:1 sobre la superficie y el fondo (WCAG 1.4.11). */
+  --control-line: #6f7a8c;
   --action: #1f5fbf;
   --action-ink: #ffffff;
   --warn: #9a5700;
@@ -36,6 +38,7 @@
   --ink: #e6eaf0;
   --ink-secondary: #9aa4b2;
   --line: #2c3440;
+  --control-line: #6d7a8c;
   --action: #7aa7f0;
   --action-ink: #12161d;
   --warn: #e0a84b;
@@ -54,6 +57,7 @@
     --ink: #e6eaf0;
     --ink-secondary: #9aa4b2;
     --line: #2c3440;
+    --control-line: #6d7a8c;
     --action: #7aa7f0;
     --action-ink: #12161d;
     --warn: #e0a84b;

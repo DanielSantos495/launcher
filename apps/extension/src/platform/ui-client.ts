@@ -35,8 +35,9 @@ export function createBrowserClient(): LauncherClient {
     },
     async backupBytes() {
       try {
-        const stored = await browser.storage.local.get(LOCAL_KEYS.backup)
-        return backupSize(Object.hasOwn(stored, LOCAL_KEYS.backup) ? stored[LOCAL_KEYS.backup] : undefined)
+        const stored = await browser.storage.local.get([LOCAL_KEYS.backup, LOCAL_KEYS.seenProfiles])
+        const own = (key: string): unknown => (Object.hasOwn(stored, key) ? stored[key] : undefined)
+        return backupSize(own(LOCAL_KEYS.backup), own(LOCAL_KEYS.seenProfiles))
       } catch {
         return 0
       }

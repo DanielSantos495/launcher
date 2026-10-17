@@ -22,7 +22,7 @@ export function createRouterClient(testEnv: TestEnv): LauncherClient {
       return parseInstallation(await testEnv.local.get(LOCAL_KEYS.installation))
     },
     async backupBytes() {
-      return backupSize(await testEnv.local.get(LOCAL_KEYS.backup))
+      return backupSize(await testEnv.local.get(LOCAL_KEYS.backup), await testEnv.local.get(LOCAL_KEYS.seenProfiles))
     },
     async imageBytes() {
       const index = await testEnv.local.get(LOCAL_KEYS.iconIndex)

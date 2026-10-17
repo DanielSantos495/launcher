@@ -1,6 +1,7 @@
 import {
   BindingHintsSchema,
   BindingSchema,
+  boundedArray,
   IdSchema,
   LabelSchema,
   LauncherDataSchema,
@@ -38,17 +39,29 @@ export const UiRequestSchema = v.variant('type', [
   v.strictObject({
     type: v.literal('data.mutate'),
     revision: RevisionSchema,
-    ops: v.pipe(v.array(OpSchema), v.minLength(1), v.maxLength(100)),
+    // El tope va antes de validar cada operación (boundedArray), como pide la lista de calidad.
+    ops: v.pipe(boundedArray(OpSchema, 100), v.minLength(1)),
   }),
   // Importación de una vez (§5.4): el dashboard ya pasó el archivo por parseImport. El SW valida y combina con
   // planImport, guarda la copia data.backup, aplica todo de una vez y revincula con rebindFromHints.
-  v.strictObject({
-    type: v.literal('data.import'),
-    revision: RevisionSchema,
-    mode: v.picklist(['merge', 'replace']),
-    data: LauncherDataSchema,
-    bindingHints: v.optional(BindingHintsSchema),
-  }),
+  v.pipe(
+    v.strictObject({
+      type: v.literal('data.import'),
+      revision: RevisionSchema,
+      mode: v.picklist(['merge', 'replace']),
+      data: LauncherDataSchema,
+      bindingHints: v.optional(BindingHintsSchema),
+    }),
+    // Igual que parseImport: una sola pista por identidad. Las de identidades desconocidas las ignora el SW.
+    v.check((request) => {
+      const seen = new Set<string>()
+      for (const hint of request.bindingHints ?? []) {
+        if (seen.has(hint.identityId)) return false
+        seen.add(hint.identityId)
+      }
+      return true
+    }, 'pistas repetidas'),
+  ),
   v.strictObject({ type: v.literal('bindings.get') }),
   v.strictObject({ type: v.literal('bindings.set'), identityId: IdSchema, binding: v.nullable(BindingSchema) }),
   v.strictObject({ type: v.literal('pair.start') }),

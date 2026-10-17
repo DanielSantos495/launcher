@@ -43,6 +43,9 @@ export async function readToken(deps: SwDeps, installation: Installation): Promi
 // Instalación y token en una sola llamada: nunca queda uno sin el otro.
 export async function savePairing(deps: SwDeps, installation: Installation, token: string): Promise<Installation> {
   const paired: Installation = { ...installation, paired: true }
+  // La caché de sesión (datos e imágenes) es de un token anterior: con el nuevo no debe servirse.
+  await deps.session.remove([SESSION_KEYS.shared])
+  await iconCacheOf(deps.session).clear()
   await deps.local.set({ [LOCAL_KEYS.installation]: paired, [LOCAL_KEYS.pairing]: { token } })
   return paired
 }
