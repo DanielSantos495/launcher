@@ -13,4 +13,6 @@ Requisitos: Node ≥ 22.13 y pnpm 11.
 
 Guía de uso (instalación, modos, copia de seguridad y privacidad): [GUIA.md](GUIA.md).
 
+Versiones: `scripts/release.sh X.Y.Z` (o un tag `vX.Y.Z`, que crea un borrador de release) genera en `dist/` los binarios del host, el zip de la extensión y `SHA256SUMS`; se verifica con `shasum -a 256 -c SHA256SUMS` (o `sha256sum -c`) dentro de `dist/`.
+
 Licencia MIT.
