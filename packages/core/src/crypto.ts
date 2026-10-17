@@ -21,8 +21,9 @@ const TAG_BYTES = 16
 // Base64 estándar y canónico: relleno obligatorio, sin saltos de línea.
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-// Tope del texto base64 de `data`: el contenido más grande admitido más la etiqueta GCM, en base64.
-const MAX_DATA_CHARS = Math.ceil((MAX_IMPORT_BYTES + TAG_BYTES) / 3) * 4
+// Tope del texto base64 de `data`: el sobre entero cabe en MAX_IMPORT_BYTES (decryptText lo mide antes de parsear),
+// así que `data` no puede tener más caracteres que eso. Es una cota derivada, no un valor aparte que mantener.
+const MAX_DATA_CHARS = MAX_IMPORT_BYTES
 
 // Los bits sobrantes del último carácter deben ser cero: así cada secuencia de bytes tiene una sola forma escrita.
 function isCanonicalBase64(s: string): boolean {
@@ -95,10 +96,11 @@ function canonicalHeader(e: EncryptedEnvelope): Uint8Array<ArrayBuffer> {
   return new TextEncoder().encode(JSON.stringify(header))
 }
 
-// Longitud en puntos de código y sin sustitutos sueltos (que TextEncoder cambiaría por U+FFFD).
+// Longitud en puntos de código (de la contraseña normalizada a NFC) y sin sustitutos sueltos (que TextEncoder cambiaría por U+FFFD).
 export function passwordLength(password: string): number {
   if (!isWellFormed(password)) return -1
-  return Array.from(password).length
+  // Se cuenta la forma NFC, la misma con la que se deriva la clave.
+  return Array.from(password.normalize('NFC')).length
 }
 
 async function deriveKey(
@@ -107,9 +109,13 @@ async function deriveKey(
   iterations: number,
   usage: 'encrypt' | 'decrypt',
 ): Promise<CryptoKey> {
-  const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, [
-    'deriveKey',
-  ])
+  const material = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password.normalize('NFC')),
+    'PBKDF2',
+    false,
+    ['deriveKey'],
+  )
   return crypto.subtle.deriveKey(
     { name: 'PBKDF2', hash: 'SHA-256', salt, iterations },
     material,

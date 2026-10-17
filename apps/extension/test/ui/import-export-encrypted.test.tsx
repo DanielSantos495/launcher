@@ -1,8 +1,14 @@
 // @vitest-environment happy-dom
-import { createEmptyData, decryptText, encryptText, serializeEnvelope } from '@account-launcher/core'
+import { createEmptyData, decryptText, encryptText, MAX_IMPORT_BYTES, serializeEnvelope } from '@account-launcher/core'
 import { cleanup, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildEncryptedExport, checkNewPassword, unlockImport } from '../../src/ui/lib/import-export'
+import {
+  buildEncryptedExport,
+  buildPlainExport,
+  checkExportText,
+  checkNewPassword,
+  unlockImport,
+} from '../../src/ui/lib/import-export'
 import { createTestEnv } from '../helpers/env'
 import { localOf, makeAccount, makeIdentity, mount } from '../helpers/ui-setup'
 
@@ -109,6 +115,17 @@ describe('importar cifrado', () => {
     expect(screen.queryByRole('dialog', { name: 'Copia cifrada' })).toBeNull()
   })
 
+  it('el campo de contraseña del diálogo usa autoComplete=current-password', async () => {
+    const { user } = await openSettings()
+    const bad = JSON.stringify({ format: 'account-launcher-encrypted', v: 1 })
+    await user.upload(
+      screen.getByLabelText<HTMLInputElement>('Importar copia'),
+      new File([bad], 'copia.json', { type: 'application/json' }),
+    )
+    await screen.findByRole('dialog', { name: 'Copia cifrada' })
+    expect(screen.getByLabelText('Contraseña de la copia').getAttribute('autocomplete')).toBe('current-password')
+  })
+
   it('un sobre inválido muestra su mensaje en el diálogo', async () => {
     const { user } = await openSettings()
     const bad = JSON.stringify({ format: 'account-launcher-encrypted', v: 1 })
@@ -134,5 +151,66 @@ describe('lib: abrir una copia cifrada', () => {
   it('buildEncryptedExport rechaza una contraseña corta', async () => {
     const built = await buildEncryptedExport(createEmptyData(), {}, [], new Date(0), 'corta')
     expect(built).toEqual({ ok: false, error: { code: 'invalid_password' } })
+  })
+})
+
+describe('lib: tamaño de la exportación', () => {
+  // Datos con una etiqueta de relleno para controlar el tamaño de la copia.
+  const padded = (pad: number) => ({ ...createEmptyData(), identities: [{ ...ANA, label: 'x'.repeat(pad) }] })
+
+  it('checkExportText: el máximo exacto cabe y un byte más no, en bytes UTF-8', () => {
+    expect(checkExportText('a'.repeat(MAX_IMPORT_BYTES))).toEqual({ ok: true, value: undefined })
+    expect(checkExportText('a'.repeat(MAX_IMPORT_BYTES + 1))).toEqual({ ok: false, error: { code: 'too_large' } })
+    // Dos bytes por carácter: pocas unidades UTF-16, pero demasiados bytes.
+    expect(checkExportText('ñ'.repeat(MAX_IMPORT_BYTES / 2))).toEqual({ ok: true, value: undefined })
+    expect(checkExportText('ñ'.repeat(MAX_IMPORT_BYTES / 2) + 'a')).toEqual({ ok: false, error: { code: 'too_large' } })
+  })
+
+  it('copia en claro: en el máximo exacto se construye y con un byte más devuelve too_large', () => {
+    const base = buildPlainExport(padded(0), {}, [], new Date(0))
+    if (!base.ok) throw new Error('no se pudo construir')
+    const pad = MAX_IMPORT_BYTES - base.value.text.length
+    const exact = buildPlainExport(padded(pad), {}, [], new Date(0))
+    expect(exact.ok && exact.value.text.length).toBe(MAX_IMPORT_BYTES)
+    expect(buildPlainExport(padded(pad + 1), {}, [], new Date(0))).toEqual({ ok: false, error: { code: 'too_large' } })
+  })
+
+  it('copia cifrada: el sobre que cabe se devuelve y el que pasa del máximo da too_large', async () => {
+    // Cada 3 bytes de contenido añaden 4 caracteres de base64: se busca el último relleno que cabe.
+    const base = await buildEncryptedExport(padded(0), {}, [], new Date(0), PASSWORD)
+    if (!base.ok) throw new Error('no se pudo cifrar')
+    const pad = Math.floor(((MAX_IMPORT_BYTES - base.value.text.length) * 3) / 4)
+    let fit = pad - 3
+    let overflow = false
+    for (let i = 0; i < 12 && !overflow; i++) {
+      const next = await buildEncryptedExport(padded(fit + 1), {}, [], new Date(0), PASSWORD)
+      if (next.ok) fit += 1
+      else {
+        expect(next.error).toEqual({ code: 'too_large' })
+        overflow = true
+      }
+    }
+    expect(overflow).toBe(true)
+    const last = await buildEncryptedExport(padded(fit), {}, [], new Date(0), PASSWORD)
+    expect(last.ok && new TextEncoder().encode(last.value.text).length <= MAX_IMPORT_BYTES).toBe(true)
+    if (last.ok) expect(last.value.text.length).toBeGreaterThan(MAX_IMPORT_BYTES - 4)
+  }, 60_000)
+
+  it('una copia en claro de 4 MB (cabe en claro) no se puede cifrar: el sobre pasaría de 5 MiB', async () => {
+    const plain = buildPlainExport(padded(4_000_000), {}, [], new Date(0))
+    expect(plain.ok).toBe(true)
+    const built = await buildEncryptedExport(padded(4_000_000), {}, [], new Date(0), PASSWORD)
+    expect(built.ok ? 'ok' : built.error).toEqual({ code: 'too_large' })
+  }, 30_000)
+})
+
+describe('contraseña Unicode', () => {
+  it('una contraseña en NFD abre una copia cifrada con su forma NFC', async () => {
+    const nfc = 'contraseña-ñandú-é'.normalize('NFC')
+    const nfd = nfc.normalize('NFD')
+    expect(nfd).not.toBe(nfc)
+    const sealed = await encryptText('{"hola":1}', nfc)
+    if (!sealed.ok) throw new Error('no se pudo cifrar')
+    expect(await decryptText(serializeEnvelope(sealed.value), nfd)).toEqual({ ok: true, value: '{"hola":1}' })
   })
 })

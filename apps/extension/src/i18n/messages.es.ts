@@ -214,6 +214,7 @@ export const es = {
   'export.error.length': 'La contraseña debe tener entre 10 y 1024 caracteres.',
   'export.error.mismatch': 'Las contraseñas no coinciden.',
   'export.error.failed': 'No se pudo cifrar la copia.',
+  'export.error.too_large': 'La copia pesa más de 5 MB y no se podría importar. Exporta menos datos.',
   'unlock.title': 'Copia cifrada',
   'unlock.intro': 'Esta copia está cifrada. Escribe su contraseña para abrirla.',
   'unlock.password': 'Contraseña de la copia',

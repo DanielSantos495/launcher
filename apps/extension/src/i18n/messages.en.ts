@@ -214,6 +214,7 @@ export const en: Record<MessageKey, string> = {
   'export.error.length': 'The password must be between 10 and 1024 characters.',
   'export.error.mismatch': 'The passwords do not match.',
   'export.error.failed': 'The backup could not be encrypted.',
+  'export.error.too_large': 'The backup is larger than 5 MB and could not be imported. Export less data.',
   'unlock.title': 'Encrypted backup',
   'unlock.intro': 'This backup is encrypted. Enter its password to open it.',
   'unlock.password': 'Backup password',

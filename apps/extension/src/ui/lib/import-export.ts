@@ -30,6 +30,20 @@ export function exportFilename(now: Date): string {
   return `account-launcher-${now.toISOString().slice(0, 10)}.json`
 }
 
+// Error de una exportación cuyo texto no cabría en la importación.
+export interface ExportSizeError {
+  readonly code: 'too_large'
+}
+
+// El texto descargable debe poder importarse luego: como mucho MAX_IMPORT_BYTES, medido igual que parseImport.
+export function checkExportText(text: string): Result<undefined, ExportSizeError> {
+  // Cada unidad UTF-16 ocupa al menos 1 byte: si ya hay más unidades que el límite, no hace falta codificar.
+  if (text.length > MAX_IMPORT_BYTES || new TextEncoder().encode(text).length > MAX_IMPORT_BYTES) {
+    return err({ code: 'too_large' })
+  }
+  return ok(undefined)
+}
+
 // Archivo de exportación listo para descargar. Los vínculos viajan como pistas por nombre de perfil (T11).
 export function buildExport(
   data: LauncherData,
@@ -40,6 +54,18 @@ export function buildExport(
   return { filename: exportFilename(now), text: serializeExport(exportData(data, bindings, profiles, now)) }
 }
 
+// Copia en claro, rechazada con too_large si luego no se podría importar.
+export function buildPlainExport(
+  data: LauncherData,
+  bindings: Bindings,
+  profiles: readonly ProfileInfo[],
+  now: Date,
+): Result<{ readonly filename: string; readonly text: string }, ExportSizeError> {
+  const built = buildExport(data, bindings, profiles, now)
+  const size = checkExportText(built.text)
+  return size.ok ? ok(built) : size
+}
+
 // Copia cifrada con contraseña (T4). El texto descargable es el sobre; la contraseña no se guarda en ningún sitio.
 export async function buildEncryptedExport(
   data: LauncherData,
@@ -47,11 +73,15 @@ export async function buildEncryptedExport(
   profiles: readonly ProfileInfo[],
   now: Date,
   password: string,
-): Promise<Result<{ readonly filename: string; readonly text: string }, CryptoError>> {
+): Promise<Result<{ readonly filename: string; readonly text: string }, CryptoError | ExportSizeError>> {
   const plain = buildExport(data, bindings, profiles, now)
   const sealed = await encryptText(plain.text, password)
   if (!sealed.ok) return sealed
-  return ok({ filename: plain.filename.replace(/\.json$/, '.encrypted.json'), text: serializeEnvelope(sealed.value) })
+  // El sobre pesa más que el contenido (base64 y etiqueta): se mide el texto final, no el de partida.
+  const text = serializeEnvelope(sealed.value)
+  const size = checkExportText(text)
+  if (!size.ok) return size
+  return ok({ filename: plain.filename.replace(/\.json$/, '.encrypted.json'), text })
 }
 
 // Valida la contraseña nueva y su confirmación antes de cifrar. La longitud cuenta puntos de código, como encryptText.

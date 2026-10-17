@@ -8,7 +8,7 @@ import { BINDINGS_SECTION_ID } from '../lib/anchors'
 import { formatList } from '../lib/format'
 import {
   buildEncryptedExport,
-  buildExport,
+  buildPlainExport,
   checkFileSize,
   checkNewPassword,
   isEncryptedImport,
@@ -73,8 +73,13 @@ export function ImportExport({ data, bindings, profiles, send, reload, download 
   const exportCopy = async (): Promise<void> => {
     setResult(undefined)
     if (!encrypt) {
-      const { filename, text } = buildExport(data, bindings, profiles, now())
-      download(filename, text)
+      const built = buildPlainExport(data, bindings, profiles, now())
+      if (!built.ok) {
+        setExportError('export.error.too_large')
+        return
+      }
+      download(built.value.filename, built.value.text)
+      setExportError(undefined)
       return
     }
     const invalid = checkNewPassword(password, confirmation)
@@ -84,10 +89,16 @@ export function ImportExport({ data, bindings, profiles, send, reload, download 
     }
     setExportError(undefined)
     setExporting(true)
-    const sealed = await buildEncryptedExport(data, bindings, profiles, now(), password)
-    setExporting(false)
+    let sealed: Awaited<ReturnType<typeof buildEncryptedExport>>
+    try {
+      sealed = await buildEncryptedExport(data, bindings, profiles, now(), password)
+    } catch {
+      sealed = { ok: false, error: { code: 'bad_format' } }
+    } finally {
+      setExporting(false)
+    }
     if (!sealed.ok) {
-      setExportError('export.error.failed')
+      setExportError(sealed.error.code === 'too_large' ? 'export.error.too_large' : 'export.error.failed')
       return
     }
     download(sealed.value.filename, sealed.value.text)
@@ -159,12 +170,19 @@ export function ImportExport({ data, bindings, profiles, send, reload, download 
         <p className="backup__note">{t('export.warning')}</p>
         {/* Las imágenes subidas (icon:<id>) no entran en la copia: al importar, esas cuentas usan el icono automático. */}
         <p className="backup__note">{t('export.images')}</p>
+        {/* Con cifrado, el error se muestra junto al campo de la contraseña. */}
+        {!encrypt && exportError !== undefined ? (
+          <p className="backup__note" role="alert">
+            {t(exportError)}
+          </p>
+        ) : null}
       </div>
       <div className="backup__row">
         <label className="backup__check">
           <input
             type="checkbox"
             checked={encrypt}
+            disabled={exporting}
             onChange={(event) => {
               setEncrypt(event.target.checked)
               setExportError(undefined)
@@ -185,6 +203,7 @@ export function ImportExport({ data, bindings, profiles, send, reload, download 
               type="password"
               autoComplete="new-password"
               maxLength={1024}
+              disabled={exporting}
               value={password}
               onChange={(event) => {
                 setPassword(event.target.value)
@@ -201,6 +220,7 @@ export function ImportExport({ data, bindings, profiles, send, reload, download 
               type="password"
               autoComplete="new-password"
               maxLength={1024}
+              disabled={exporting}
               value={confirmation}
               onChange={(event) => {
                 setConfirmation(event.target.value)
@@ -353,7 +373,7 @@ function UnlockDialog({ text, onCancel, onUnlocked, onInvalid }: UnlockDialogPro
           <input
             {...fieldAria(fieldId, false, failure !== undefined)}
             type="password"
-            autoComplete="off"
+            autoComplete="current-password"
             maxLength={1024}
             value={password}
             onChange={(event) => {
