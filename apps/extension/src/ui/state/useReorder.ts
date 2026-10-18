@@ -122,13 +122,15 @@ export function useReorder(params: ReorderParams): {
     async (kind: Dragging['kind'], id: string, label: string, ids: string[]): Promise<void> => {
       const { mutate, onError, t, sections, identities } = latest.current
       if (kind === 'account') focusAfter.current = id
-      pending.current.set(kind, { base: kind === 'account' ? sections : identities, ids })
+      const request = { base: kind === 'account' ? sections : identities, ids }
+      pending.current.set(kind, request)
       const response = await mutate([{ type: kind === 'account' ? 'account.reorder' : 'identity.reorder', ids }])
       onError(response.ok ? undefined : response.error)
       if (response.ok) {
         say(t('reorder.moved', { label, position: ids.indexOf(id) + 1, total: ids.length }))
       } else {
-        pending.current.delete(kind)
+        // Con otra petición en vuelo, su pending no es de esta: solo se borra el propio.
+        if (pending.current.get(kind) === request) pending.current.delete(kind)
         focusAfter.current = undefined
       }
     },

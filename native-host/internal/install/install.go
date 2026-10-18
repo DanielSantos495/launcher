@@ -45,6 +45,7 @@ func usageError(msg string) error { return fmt.Errorf("%w: %s", ErrUsage, msg) }
 // ejecutables de los navegadores con archivos temporales.
 var (
 	goos     = runtime.GOOS
+	openFile = os.OpenFile // sustituible en las pruebas para inyectar fallos
 	browsers = Browsers
 )
 
@@ -280,18 +281,32 @@ func write(p plan, binary []byte) error {
 //
 // En Windows un .exe en uso no se puede borrar pero sí renombrar: el anterior pasa a <dst>.old y se intenta borrar al
 // final, sin fallar si sigue en uso (se borra en la siguiente instalación).
-func copyBinary(dst string, data []byte) error {
+func copyBinary(dst string, data []byte) (err error) {
 	if goos == "windows" {
 		old := dst + ".old"
 		_ = os.Remove(old)
-		if err := os.Rename(dst, old); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return err
+		renamed := true
+		if err := os.Rename(dst, old); err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			renamed = false
 		}
-		defer func() { _ = os.Remove(old) }()
+		// Si la copia falla, el binario anterior vuelve a su sitio; .old solo se borra si todo salió bien.
+		defer func() {
+			if err != nil {
+				if renamed {
+					_ = os.Remove(dst)
+					_ = os.Rename(old, dst)
+				}
+				return
+			}
+			_ = os.Remove(old)
+		}()
 	} else if err := os.Remove(dst); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	f, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o700)
+	f, err := openFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o700)
 	if err != nil {
 		return err
 	}

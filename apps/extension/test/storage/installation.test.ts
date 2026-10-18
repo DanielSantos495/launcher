@@ -104,6 +104,14 @@ describe('savePairing', () => {
     expect(session.dump()).toEqual({})
   })
 
+  it('si la caché de sesión no se puede limpiar, el token se guarda igual', async () => {
+    const { deps, local } = createTestEnv()
+    deps.session.remove = () => Promise.reject(new Error('sesión no disponible'))
+    const paired = await savePairing(deps, { installationId: 'abc', paired: false }, TOKEN)
+    expect(paired.paired).toBe(true)
+    expect(local.dump().pairing).toEqual({ token: TOKEN })
+  })
+
   it('conserva los campos propios de la instalación', async () => {
     const { deps, local } = createTestEnv()
     const installation = { installationId: 'abc', paired: false, ownIdentityId: 'ana', ownProfileDirectory: 'Default' }

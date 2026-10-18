@@ -387,3 +387,35 @@ func TestUninstallRejectsUnknownBrowser(t *testing.T) {
 		t.Fatalf("Uninstall(opera) = %v; quiero un error de uso", err)
 	}
 }
+
+func TestCopyBinaryWindowsKeepsThePreviousBinaryWhenTheCopyFails(t *testing.T) {
+	newFixture(t) // restaura goos y browsers al terminar
+	goos = "windows"
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "launcher-host.exe")
+	if err := os.WriteFile(dst, []byte("anterior"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	oldOpen := openFile
+	openFile = func(string, int, os.FileMode) (*os.File, error) { return nil, errors.New("fallo inyectado") }
+	t.Cleanup(func() { openFile = oldOpen })
+	if err := copyBinary(dst, []byte("nuevo")); err == nil {
+		t.Fatal("quería el error de la copia")
+	}
+	if got := readFile(t, dst); string(got) != "anterior" {
+		t.Fatalf("el binario anterior no volvió a su sitio: %q", got)
+	}
+	if _, err := os.Stat(dst + ".old"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf(".old debería haberse devuelto a dst: %v", err)
+	}
+	openFile = oldOpen
+	if err := copyBinary(dst, []byte("nuevo")); err != nil {
+		t.Fatal(err)
+	}
+	if got := readFile(t, dst); string(got) != "nuevo" {
+		t.Fatalf("copia correcta = %q", got)
+	}
+	if _, err := os.Stat(dst + ".old"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(".old debería borrarse tras una copia correcta")
+	}
+}

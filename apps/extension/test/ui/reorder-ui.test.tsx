@@ -150,6 +150,44 @@ describe('ordenar cuentas con el teclado', () => {
   })
 })
 
+describe('peticiones de orden solapadas', () => {
+  it('si falla la primera, la segunda en vuelo conserva su orden pendiente', async () => {
+    const t = createTestEnv({ local: localOf({ identities: [ana], accounts: abc() }) })
+    let calls = 0
+    let failFirst: () => void = () => undefined
+    const { container } = mount(t, {
+      wrap: (client) => ({
+        ...client,
+        send(request) {
+          if (request.type !== 'data.mutate') return client.send(request)
+          calls += 1
+          if (calls === 1) {
+            return new Promise((resolve) => {
+              failFirst = () => {
+                void failing(client, () => true)
+                  .send(request)
+                  .then(resolve)
+              }
+            })
+          }
+          return new Promise(() => undefined) // la segunda no termina
+        },
+      }),
+    })
+    await screen.findAllByRole('listitem')
+    const button = within(tile(container, 'a')).getByRole('button', { name: 'Alfa' })
+    button.focus()
+    fireEvent.keyDown(button, { key: 'ArrowDown', altKey: true })
+    fireEvent.keyDown(button, { key: 'ArrowDown', altKey: true })
+    expect(calls).toBe(2)
+    failFirst()
+    await screen.findByRole('alert')
+    // Con el pending de la segunda, «Alfa» ya está al final: otro paso hacia abajo es el borde y no escribe.
+    fireEvent.keyDown(button, { key: 'ArrowDown', altKey: true })
+    expect(calls).toBe(2)
+  })
+})
+
 describe('ordenar cuentas arrastrando', () => {
   it('soltar una cuenta sobre otra la coloca en su puesto', async () => {
     const { container, client } = await open(abc())

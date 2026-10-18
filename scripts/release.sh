@@ -34,7 +34,11 @@ if [[ "$manifest_version" != "$version" ]]; then
   echo "error: la versión del manifest ($manifest_version) no coincide con $version" >&2
   exit 1
 fi
-(cd "$built" && zip -X -r -q "$dist/account-launcher-extension-${version}.zip" .)
+# Zip reproducible: fechas fijas (las del último commit) y lista de archivos ordenada.
+export TZ=UTC
+stamp="$(git -C "$root" log -1 --format=%cd --date=format-local:%Y%m%d%H%M.%S)"
+(cd "$built" && find . -exec touch -h -t "$stamp" {} + \
+  && find . -type f | LC_ALL=C sort | zip -X -q "$dist/account-launcher-extension-${version}.zip" -@)
 
 # Sumas de verificación.
 if command -v sha256sum >/dev/null 2>&1; then
